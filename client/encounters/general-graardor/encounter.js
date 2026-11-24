@@ -30,8 +30,8 @@ export const healGraardorCommand = {
   type: "heal-graardor",
 };
 
-// North "Shoot->door" tile of the Altar-Door lane (x = 54), directly in front of the Bandos altar at (53..55, 58..60).
-export const altarDoorPlayerStart = [54, 57]; // WIKI, OBS: Region 11347 Altar-Door north endpoint
+// Start at the southern red "Shoot->altar" marker, facing the altar along x = 54.
+export const altarDoorPlayerStart = [54, 42]; // OBS: user-selected Altar-Door south endpoint, region 11347
 export const altarDoorGraardorStart = [52, 50]; // inferred: 4x4 footprint centered on the x = 54 Altar-Door lane (x: 52..55, y: 50..53)
 export const altarDoorGrimspikeStart = [50, 50]; // inferred: world (2868, 5362, 2) shifted 2 tiles west off the boss lane
 
@@ -743,7 +743,7 @@ export const generalGraardorDefinition = {
             label: "6:0",
           },
         ],
-        info: "Standard starts at the west Big door. Altar-Door starts at the north altar tile with General Graardor aligned on the central lane. 6:0 starts on the southeast start marker with the normal room spawns. Altar-Door and 6:0 have separate tile marker presets.",
+        info: "Standard starts at the west Big door. Altar-Door starts on the southern red Shoot->altar tile with General Graardor aligned on the central lane. 6:0 starts on the southeast start marker with the normal room spawns. Altar-Door and 6:0 have separate tile marker presets.",
       },
       { key: spawnMinionsKey, label: "Spawn bodyguard minions", setup: true },
     ],

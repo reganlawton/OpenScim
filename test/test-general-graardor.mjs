@@ -147,6 +147,9 @@ try {
     engine.reset(undefined, undefined, { graardorStartMode: "altar_door" });
     engine.setEquipment(equipment);
     const playerStart = [...engine.player().position];
+    engine.teleportPlayer([54, 57], 0);
+    engine.reset(undefined, undefined, { graardorStartMode: "altar_door" });
+    const restartedPlayerStart = [...engine.player().position];
 
     return {
       defaultPlayerStart,
@@ -155,6 +158,7 @@ try {
       hasBlowpipeInInventory: inventoryIds.includes(12926),
       blowpipeDartId,
       playerStart,
+      restartedPlayerStart,
       npcs,
       doorReplacementCount: replacements.filter((r) => r.targetLocId === 40419).length,
       altarGroundZ,
@@ -177,7 +181,8 @@ try {
   assert.equal(initialCheck.equipment.ring, 19710, "Ring of suffering (i) equipped by default");
   assert.equal(initialCheck.hasBlowpipeInInventory, true, "Toxic blowpipe in inventory by default");
   assert.equal(initialCheck.blowpipeDartId, 11230, "Toxic blowpipe loaded with dragon darts");
-  assert.deepEqual(initialCheck.playerStart, [54, 57], "Altar-Door mode starts on north Shoot->door tile");
+  assert.deepEqual(initialCheck.playerStart, [54, 42], "Altar-Door mode starts on the southern red Shoot->altar tile");
+  assert.deepEqual(initialCheck.restartedPlayerStart, [54, 42], "Restart returns to Shoot->altar rather than the north altar tile");
   assert.equal(initialCheck.doorReplacementCount, 3, "All 3 Big door tiles (47, 41..43) replaced with interactive 40419");
   assert.ok(
     initialCheck.altarGroundZ !== null &&
@@ -206,7 +211,8 @@ try {
   // and toward the Bandos altar (54, 59), minions attacking immediately, and victory
   // triggering as soon as General Graardor dies while the three minions are still alive.
   const fightResult = await page.evaluate(() => {
-    engine.reset(undefined, undefined, { graardorStartMode: "altar_door" });
+    // Explicit northern fixture for testing the door-bound Red-X crossing.
+    engine.reset([54, 57], undefined, { graardorStartMode: "altar_door" });
     const graardor = engine.worldState.actors.get("general_graardor");
     const strongstack = engine.worldState.actors.get("sergeant_strongstack");
     const steelwill = engine.worldState.actors.get("sergeant_steelwill");

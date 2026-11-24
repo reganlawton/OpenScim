@@ -112,7 +112,7 @@ export const generalGraardorPresentation = (BaseScene) => ({
     blurb:
       "General Graardor and his three bodyguards — Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike — attack together in Bandos' Stronghold. Practice standard door entry, the central Altar-Door red-X route, or the separate 6:0 ranged kiting route around the room.",
     setupContext:
-      "Standard starts at the west Big door by default. Altar-Door starts at the north altar tile with General Graardor aligned on the central lane. 6:0 starts on the southeast start marker with normal room spawns. Choose the matching Altar-Door or 6:0 preset in Tile Markers. Door and altar red-X interactions stall General Graardor while you are underneath him. Defeating General Graardor completes the fight.",
+      "Standard starts at the west Big door by default. Altar-Door starts on the southern red Shoot->altar tile with General Graardor aligned on the central lane. 6:0 starts on the southeast start marker with normal room spawns. Choose the matching Altar-Door or 6:0 preset in Tile Markers. Door and altar red-X interactions stall General Graardor while you are underneath him. Defeating General Graardor completes the fight.",
     wikiUrl: "https://oldschool.runescape.wiki/w/General_Graardor/Strategies",
   },
 });

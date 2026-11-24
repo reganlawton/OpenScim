@@ -1,7 +1,7 @@
 // General Graardor (client/encounters/general-graardor/). Supports three starting
 // modes via graardorStartMode:
-// - "altar_door": player at 54,57 ("Shoot->door" in front of the
-//   Bandos altar), General Graardor at 52,50 (4x4, 255 hitpoints) on the Altar-Door
+// - "altar_door": player at 54,42 (southern red "Shoot->altar" marker),
+//   General Graardor at 52,50 (4x4, 255 hitpoints) on the Altar-Door
 //   lane, Sergeant Strongstack (50,46), Sergeant Steelwill (56,40) and Sergeant
 //   Grimspike (50,50).
 // - "standard_door" (default): player at 48,42 (inside the west Big door), General
@@ -122,7 +122,8 @@ export const scenarios = [
         protect(api, "ProtectMagic");
         offensive(api, "Rigour");
       }
-      stepAltarDoorCycle(tick, api);
+      // Start on the south endpoint: enter the existing lap at its altar-bound shot.
+      stepAltarDoorCycle(tick + 12, api);
     },
   },
   {
