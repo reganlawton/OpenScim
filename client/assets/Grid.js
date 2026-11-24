@@ -29775,7 +29775,7 @@ function oLe(ez, eA) {
     if (nLe(ez, localX2, localY2, tLe, localX2 + eI, localY2 + eK, 2)) {
       return {
         locType: locType,
-        coord: [localX2, localY2],
+        coord: [localX2 + (eI >> 1), localY2 + (eK >> 1)],
       };
     }
   }
@@ -29961,7 +29961,7 @@ function rLe(ez) {
             f6 = false;
           }
           if (f6) {
-            const f9 = [localX3, localY3];
+            const f9 = [localX3 + (f4 >> 1), localY3 + (f5 >> 1)];
             eW.push(...dLe(locType, f9, eV));
           }
         }
@@ -54608,7 +54608,7 @@ var mn = (ez) => {
         const n7 = onTakeGroundItem ? lY(n6 ? [n6.x, n6.y] : null, n2) : [];
         const n8 = iLe({
           tile: n6 ? [n6.x, n6.y] : null,
-          onTileClick: (n9) => m8(n9, n3),
+          onTileClick: (n9) => m8(n9, n3, null),
           entityContext: m5,
           ray: n4,
           screenPx: n2,
@@ -54675,7 +54675,7 @@ var mn = (ez) => {
       if (m5.locs && m5.locs.length > 0) {
         const nb = oLe(n4, m5.locs);
         if (nb) {
-          m8(nb.coord, n3);
+          m8(nb.coord, n3, null);
           return true;
         }
       }

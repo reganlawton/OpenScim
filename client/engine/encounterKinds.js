@@ -2,6 +2,7 @@ var encounterDefinitions = [
   {kind:"zebak",variantKinds:[],slug:"zebak",registered:true},
   {kind:"toa_nexus",variantKinds:[],slug:"toa",registered:true},
   {kind:"doom_of_mokhaiotl",variantKinds:["doom_of_mokhaiotl_deep"],slug:"doom-of-mokhaiotl",registered:true},
+  {kind:"general_graardor",variantKinds:[],slug:"general-graardor",registered:true},
   // Desert Treasure II (client/dt2/bosses.js). Vardorvis is registered
   // (client/encounters/vardorvis/, his awakened variant with it); the
   // other three fights do not exist yet.

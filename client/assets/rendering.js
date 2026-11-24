@@ -9397,6 +9397,19 @@ var Xm = class e {
         }
       }
     }
+    if ((e === 44 || e === 45) && (a === 82 || a === 83)) {
+      for (const t of [
+        s.tileHeights,
+        s.tileUnderlays,
+        s.tileOverlays,
+        s.tileShapes,
+        s.tileRotations,
+        s.tileRenderFlags,
+        s.tileLightOcclusions,
+      ]) {
+        [t[0], t[1], t[2], t[3]] = [t[2], t[3], t[0], t[1]];
+      }
+    }
     sg.end(`MapLoader.loadMapSquare(${e},${a})`);
     return {
       mapX: e,
@@ -9463,6 +9476,7 @@ var Xm = class e {
     }
     const i = new rd(r.data);
     const l = [];
+    const c = (e === 44 || e === 45) && (a === 82 || a === 83) ? 2 : 0;
     let o = -1;
     let d = i.sg();
     while (d !== 0) {
@@ -9477,14 +9491,16 @@ var Xm = class e {
         const r = i.Od();
         const d = r >> 2;
         const g = r & 3;
-        l.push({
-          id: o,
-          localX: t,
-          localY: n,
-          level: s,
-          type: d,
-          rotation: g,
-        });
+        if (s >= c) {
+          l.push({
+            id: o,
+            localX: t,
+            localY: n,
+            level: s - c,
+            type: d,
+            rotation: g,
+          });
+        }
         a = i.eg();
       }
       d = i.sg();

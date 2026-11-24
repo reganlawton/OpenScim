@@ -29,6 +29,8 @@ var NO_LAUNCH_DAMAGE_MULTIPLIERS = {
   outgoingDamageMultiplier: undefined,
   specDamageMultiplier: undefined,
 };
+// WIKI, TABLE: Ring of recoil (2550) and Ring of suffering variants (19710, 20655, 20657, 25246, 25248, 26761, 26762) recoil 10% of damage taken + 1.
+var RECOIL_RING_ITEM_IDS = new Set([2550, 19710, 20655, 20657, 25246, 25248, 26761, 26762]);
 function takeBurnPulse(actor, tick) {
   const burnStacks = actor.burnStacks;
   if (burnStacks === undefined || 0 === burnStacks.length) {
@@ -809,6 +811,33 @@ var CombatSystem = class {
       });
     }
     combatContext.onDamageApplied?.(appliedDamage);
+    if (
+      appliedDamage.effectiveDamage > 0 &&
+      this.isNpc(attacker) &&
+      this.isPlayer(target) &&
+      attacker.alive &&
+      target.equipment?.ring !== undefined &&
+      RECOIL_RING_ITEM_IDS.has(target.equipment.ring)
+    ) {
+      // WIKI: Ring of recoil / Ring of suffering deals floor(damage * 0.1) + 1 recoil damage back to the attacker.
+      const recoilDamage = Math.floor(appliedDamage.effectiveDamage / 10) + 1;
+      this.applyHit(
+        worldState,
+        target,
+        attacker,
+        {
+          style: "typeless",
+          attackKind: "typeless",
+          rolledDamage: recoilDamage,
+          accuracySucceeded: true,
+          impactDelayTicks: 0,
+        },
+        combatContext,
+        undefined,
+        undefined,
+        "fixed",
+      );
+    }
     if (attack.postHitEffects && this.isPlayer(attacker) && this.isNpc(target)) {
       const applicableEffects =
         appliedDamage.effectiveDamage > 0

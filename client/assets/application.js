@@ -5641,6 +5641,162 @@ var _le = {
     },
     naked: Ple,
   },
+  // General Graardor (client/encounters/general-graardor/): solo gear setups from the OSRS Wiki
+  // strategy guide (General Graardor/Strategies). Defaults to the Crystal (Bow of faerdhinen) setup
+  // with Ring of suffering (i) and Toxic blowpipe for 6:0 Altar-Door kiting and minion tanking/healing.
+  general_graardor: {
+    crystal: {
+      name: "Crystal (Bowfa)",
+      equipment: {
+        head: 23971, // Crystal helm
+        cape: 22109, // Ava's assembler
+        amulet: 19547, // Necklace of anguish
+        weapon: 25865, // Bow of Faerdhinen
+        body: 23975, // Crystal body
+        legs: 23979, // Crystal legs
+        hands: 7462, // Barrows gloves
+        boots: 13237, // Pegasian boots
+        ring: 19710, // Ring of suffering (i)
+      },
+      inventory: gT([
+        12926, 27624, 12002, 19544, // Toxic blowpipe, Ancient sceptre, Occult necklace, Tormented bracelet
+        22461, 22461, 12625, 12625, // Two bastion potions, two stamina potions
+        6685, 6685, 6685, 6685, // Four Saradomin brews
+        3024, 3024, 3024, 3024, // Four super restores
+        3024, 3024, 13441, 13441, // Two super restores, two anglerfish
+        13441, 13441, 13441, 13441, // Four anglerfish
+        13441, 13441, 13441, 27281, // Three anglerfish, divine rune pouch
+      ].map((id) => ({ id }))),
+      supplies: {
+        equippedAmmo: { id: 22947 }, // Rada's blessing 4
+        quiverAmmo: null,
+        runePouch: {
+          kind: "divine",
+          slots: [
+            { id: gO.blood },
+            { id: gO.death },
+            { id: gO.soul },
+            { id: gO.water },
+          ],
+        },
+        blowpipe: { id: 11230 }, // Dragon dart
+        selectedSpell: "Blood Barrage",
+        spellbook: "ancient",
+      },
+    },
+    max_ranged: {
+      name: "Max Ranged (Zaryte crossbow)",
+      equipment: {
+        head: 27235, // Masori mask (f)
+        cape: 28951, // Dizana's quiver
+        amulet: 19547, // Necklace of anguish
+        weapon: 26374, // Zaryte crossbow
+        body: 27238, // Masori body (f)
+        shield: 21000, // Twisted buckler
+        legs: 27241, // Masori chaps (f)
+        hands: 26235, // Zaryte vambraces
+        boots: 13237, // Pegasian boots
+        ring: 19710, // Ring of suffering (i)
+      },
+      inventory: gT([
+        12926, 21946, 21006, 12002, // Toxic blowpipe, Diamond dragon bolts (e), Kodai wand, Occult necklace
+        22461, 22461, 12625, 12625, // Two bastion potions, two stamina potions
+        6685, 6685, 6685, 6685, // Four Saradomin brews
+        3024, 3024, 3024, 3024, // Four super restores
+        3024, 3024, 13441, 13441, // Two super restores, two anglerfish
+        13441, 13441, 13441, 13441, // Four anglerfish
+        13441, 13441, 13441, 27281, // Three anglerfish, divine rune pouch
+      ].map((id) => ({ id }))),
+      supplies: {
+        equippedAmmo: { id: 21944 }, // Ruby dragon bolts (e)
+        quiverAmmo: { id: 22947 }, // Rada's blessing 4
+        runePouch: {
+          kind: "divine",
+          slots: [
+            { id: gO.blood },
+            { id: gO.death },
+            { id: gO.soul },
+            { id: gO.water },
+          ],
+        },
+        blowpipe: { id: 11230 }, // Dragon dart
+        selectedSpell: "Blood Barrage",
+        spellbook: "ancient",
+      },
+    },
+    max_mage: {
+      name: "Max Magic (Tumeken's shadow)",
+      equipment: {
+        head: 21018, // Ancestral hat
+        cape: 21791, // Imbued saradomin cape
+        amulet: 12002, // Occult necklace
+        weapon: 27275, // Tumeken's shadow
+        body: 21021, // Ancestral robe top
+        legs: 21024, // Ancestral robe bottom
+        hands: 19544, // Tormented bracelet
+        boots: 13235, // Eternal boots
+        ring: 19710, // Ring of suffering (i)
+      },
+      inventory: gT([
+        12926, 27641, 12625, 12625, // Toxic blowpipe, saturated heart, two stamina potions
+        6685, 6685, 6685, 6685, // Four Saradomin brews
+        3024, 3024, 3024, 3024, // Four super restores
+        3024, 3024, 13441, 13441, // Two super restores, two anglerfish
+        13441, 13441, 13441, 13441, // Four anglerfish
+        13441, 13441, 13441, 13441, // Four anglerfish
+        13441, 13441, 13441, 27281, // Three anglerfish, divine rune pouch
+      ].map((id) => ({ id }))),
+      supplies: {
+        equippedAmmo: { id: 22947 }, // Rada's blessing 4
+        quiverAmmo: null,
+        runePouch: {
+          kind: "divine",
+          slots: [
+            { id: gO.blood },
+            { id: gO.death },
+            { id: gO.soul },
+            { id: gO.water },
+          ],
+        },
+        blowpipe: { id: 11230 }, // Dragon dart
+        selectedSpell: "Blood Barrage",
+        spellbook: "ancient",
+      },
+    },
+    max_melee: {
+      name: "Max Melee (Osmumten's fang)",
+      equipment: {
+        head: 26382, // Torva full helm
+        cape: 21295, // Infernal cape
+        amulet: 19553, // Amulet of torture
+        weapon: 26219, // Osmumten's fang
+        body: 26384, // Torva platebody
+        shield: 22322, // Avernic defender
+        legs: 26386, // Torva platelegs
+        hands: 22981, // Ferocious gloves
+        boots: 13239, // Primordial boots
+        ring: 19710, // Ring of suffering (i)
+      },
+      inventory: gT([
+        13576, 11804, 12926, 12695, // Dragon warhammer, Bandos godsword, Toxic blowpipe, super combat potion
+        12695, 12625, 6685, 6685, // Super combat potion, stamina potion, two Saradomin brews
+        6685, 6685, 3024, 3024, // Two Saradomin brews, two super restores
+        3024, 3024, 13441, 13441, // Two super restores, two anglerfish
+        13441, 13441, 13441, 13441, // Four anglerfish
+        13441, 13441, 3144, 3144, // Two anglerfish, two cooked karambwans
+        3144, 3144, 25818, 27281, // Two cooked karambwans, Book of the Dead, divine rune pouch
+      ].map((id) => ({ id }))),
+      supplies: {
+        equippedAmmo: { id: 22947 }, // Rada's blessing 4
+        quiverAmmo: null,
+        runePouch: Ile,
+        blowpipe: { id: 11230 }, // Dragon dart
+        selectedSpell: null,
+        spellbook: "arceuus",
+      },
+    },
+    naked: Ple,
+  },
   zuk: $le,
   inferno: $le,
   // The waves of the Fortis Colosseum (client/encounters/colosseum/). Worn: fortified Masori, Dizana's quiver
@@ -30510,6 +30666,64 @@ var Xfe = [
 var Qfe = {
   zebak: {name:"Zebak",description:"Tombs of Amascut",buildRoute:path=>({path,title:"Zebak | OpenScim.dev",description:"Solo Zebak encounter",h1:"Zebak",intro:"Tombs of Amascut",keywords:["Zebak"],ogImagePath:Jfe,breadcrumbs:[{name:"Zebak",path}],jsonLd:[],noindex:true})},
   toa_nexus: {name:"Tombs of Amascut",description:"The nexus",buildRoute:path=>({path,title:"Tombs of Amascut | OpenScim.dev",description:"Tombs of Amascut nexus",h1:"Tombs of Amascut",intro:"The nexus",keywords:["Tombs of Amascut"],ogImagePath:Jfe,breadcrumbs:[{name:"Tombs of Amascut",path}],jsonLd:[],noindex:true})},
+  general_graardor: {
+    name: "General Graardor",
+    description: "Practice the General Graardor 6:0 Altar-Door method and minion tanking.",
+    buildRoute: function (h2) {
+      return {
+        path: h2,
+        title: "General Graardor Simulator | OpenScim.dev",
+        description:
+          "Practice General Graardor and his three bodyguards in Bandos' Stronghold. Drill the 6:0 Altar-Door red-X method and test your minion tanking in your browser.",
+        h1: "General Graardor Boss Simulator",
+        intro:
+          "General Graardor is the leader of Bandos' forces in the God Wars Dungeon, accompanied by Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike. Practice the 6:0 Altar-Door method with red-X clicks on the Big door and Bandos altar.",
+        keywords: [
+          "General Graardor",
+          "OSRS Bandos",
+          "Bandos 6:0",
+          "Altar Door method",
+          "General Graardor simulator",
+        ],
+        ogImagePath: Jfe,
+        breadcrumbs: [
+          {
+            name: "Home",
+            path: "/",
+          },
+          {
+            name: "General Graardor",
+            path: h2,
+          },
+        ],
+        jsonLd: [
+          tye([
+            {
+              name: "Home",
+              path: "/",
+            },
+            {
+              name: "General Graardor",
+              path: h2,
+            },
+          ]),
+          {
+            "@context": "https://schema.org",
+            "@type": "VideoGame",
+            name: "Old School RuneScape",
+            alternateName: "OSRS",
+            publisher: {
+              "@type": "Organization",
+              name: "Jagex",
+            },
+            genre: ["MMORPG", "Role-playing game"],
+            url: "https://oldschool.runescape.com/",
+          },
+        ],
+        noindex: true,
+      };
+    },
+  },
   yama_p3: {
     name: "Yama",
     description: "Practice the Yama Phase 3 fight and its contracts.",
@@ -37989,6 +38203,25 @@ var Jbe = [
       Hbe(33, 43, Kbe),
       Hbe(32, 29, Kbe),
       Hbe(26, 34, Kbe),
+    ],
+  },
+  // General Graardor (client/encounters/general-graardor/): the 6:0 Altar-Door
+  // RuneLite ground markers for region 11347 (Bandos' Stronghold).
+  {
+    id: "general_graardor_altar_door",
+    name: "Altar-Door (6:0)",
+    description:
+      "6:0 Altar-Door kiting lane between the Bandos altar and the Big door (Region 11347)",
+    encounterKind: "general_graardor",
+    link: "https://oldschool.runescape.wiki/w/General_Graardor/Strategies",
+    defaultActive: true,
+    markers: [
+      Hbe(54, 57, "#FF14D74F", "Shoot->door"),
+      Hbe(54, 54, "#FFD81414", "A"),
+      Hbe(54, 51, "#FF14D74F", "D"),
+      Hbe(54, 48, "#FFD81414", "A"),
+      Hbe(54, 45, "#FF14D74F", "D"),
+      Hbe(54, 42, "#FFD81414", "Shoot->altar"),
     ],
   },
   // The waves of the Colosseum (client/encounters/colosseum/): the ground
