@@ -33,6 +33,8 @@ const bigDoorTile = [47, 42];
 const bandosAltarCenterTile = [54, 59];
 
 // One 24-tick 6:0 Altar-Door lap on x = 54:
+// This is the existing scripted route, not proof of a damage-free game method:
+// Red-X stalls only during overlap, so an exit shot can now allow retaliation.
 //   cycleTick  0: at (54, 57) "Shoot->door", shoot Graardor
 //   cycleTick  1: red-X click Big door (47, 42) to walk south under Graardor
 //   cycleTick  4: at (54, 51) "D", shoot Graardor

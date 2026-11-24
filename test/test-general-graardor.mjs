@@ -195,7 +195,7 @@ try {
     // Tick 2 & 3: Red-X click the Big door at (47, 42) to walk south under Graardor (54,57 -> 54,55 -> 54,53).
     engine.injectAction({ type: "attackTarget", targetId: null });
     engine.advanceTick([47, 42]);
-    const redXStallAfterStepUnder = engine.getEncounterSnapshot().state.redXStallUntilTick;
+    const redXInteractionActive = engine.getEncounterSnapshot().state.redXInteractionActive;
     const graardorPosBeforeStallTick = [...graardor.position];
     engine.advanceTick([47, 42]);
     const graardorPosDuringStallTick = [...graardor.position];
@@ -206,7 +206,7 @@ try {
 
     return {
       minionAttacksOnTick1,
-      redXStallTriggered: redXStallAfterStepUnder >= 4,
+      redXStallTriggered: redXInteractionActive,
       graardorStalledInPlace:
         graardorPosBeforeStallTick[0] === graardorPosDuringStallTick[0] &&
         graardorPosBeforeStallTick[1] === graardorPosDuringStallTick[1],

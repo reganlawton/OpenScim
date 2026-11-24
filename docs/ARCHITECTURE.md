@@ -332,6 +332,11 @@ The encounter never holds the engine. It is handed context objects:
 - the command and run-start contexts: `world`, `spawnNpc`, `despawnNpc`
   (and `tick`, `playerPos` for commands, `placePlayer` at the run's start).
 
+Tick-context `inputs.targetTile` is the current walk or interaction destination,
+available after queued player inputs and before NPC turns. Treat it as read-only.
+Graardor uses the door/altar destination with true-tile overlap to decide whether
+Red-X prevents movement; leaving the footprint adds no separate stall timer.
+
 `world` is the `WorldState`: `tick`, `actors` (a Map by id; the player is
 `"player"`), `pendingHits`, `areaEffects`, `groundItems`, `occupancy`, and the
 lookups `getPlayer()` (player), `getNpc(id)` (NPC by id), `getNpcs()` (all NPCs).

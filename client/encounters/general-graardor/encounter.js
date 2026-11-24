@@ -63,7 +63,6 @@ const grimspikeMaxHit = 21; // WIKI, TABLE
 const graardorRangedChanceDenominator = 3; // WIKI: 1/3 chance to use ranged shockwave when in melee distance
 const ticksFromDefeatToVictory = 7; // CACHE: seq 7020 is 125 cycles (~5 ticks) plus 2 ticks settle
 const minionDespawnAfterDeathTicks = 5; // CACHE: seq 6156 is 80 cycles (~3 ticks) plus 2 ticks settle
-const redXStallDurationTicks = 3; // WIKI, OBS: red-X object walk under Graardor stalls his movement/attack through exit shot
 
 const graardorRangedProjectile = {
   spotAnimId: 1202, // CACHE: General Graardor shockwave projectile
@@ -129,14 +128,14 @@ function isRedXObjectTile(tile) {
 const graardorDefinition = defineNpc({
   id: "general-graardor-boss",
   move: ({ actor, context, config }) => {
-    if (!config.isFightActive() || config.isRedXStalled(context.tick)) {
+    if (!config.isFightActive() || config.isRedXStalled(actor, context)) {
       return [];
     }
     return getNpcPursuitMoves(actor, context);
   },
   tick: ({ actor, context, config }) => {
     const idle = { environmentalDamages: [] };
-    if (!config.isFightActive() || config.isRedXStalled(context.tick)) {
+    if (!config.isFightActive() || config.isRedXStalled(actor, context)) {
       return idle;
     }
     const player = context.world.getPlayer();
@@ -429,14 +428,16 @@ export class GeneralGraardorEncounter {
   outcome = activeOutcome;
   standardDoorStart = true;
   spawnMinions = true;
-  currentTick = 0;
-  redXStallUntilTick = -1;
+  redXInteractionActive = false;
   definitions;
 
   constructor() {
     const config = {
       isFightActive: () => this.outcome.phase === "active",
-      isRedXStalled: (tick) => tick <= this.redXStallUntilTick,
+      // WIKI: https://oldschool.runescape.wiki/w/Red-X — suppress pathfinding
+      // while underneath with a Red-X interaction active. No timed exit grace.
+      isRedXStalled: (actor, context) =>
+        this.redXInteractionActive && areFootprintsOverlapping(actor, context.world.getPlayer()),
     };
     this.definitions = new NpcDefinitionRegistry([
       graardorDefinition.register(config),
@@ -452,8 +453,7 @@ export class GeneralGraardorEncounter {
       seeds?.encounterSeed ?? (Math.floor(Math.random() * 4294967296) >>> 0 || 1);
     this.random = createSeededRandom(this.encounterSeed);
     this.outcome = activeOutcome;
-    this.currentTick = 0;
-    this.redXStallUntilTick = -1;
+    this.redXInteractionActive = false;
   }
 
   getSeeds() {
@@ -600,28 +600,12 @@ export class GeneralGraardorEncounter {
   }
 
   resolveHazards(context) {
-    this.currentTick = context.tick;
-    this.lastWorld = context.world;
+    const player = context.world.getPlayer();
+    // Resolve the current destination after queued inputs, before Graardor's
+    // turn. Attacking or choosing another destination cancels the interaction.
+    // Inferred: door/altar destinations represent the existing object-click path.
+    this.redXInteractionActive = player.attackTarget === null && isRedXObjectTile(context.inputs.targetTile);
     return [];
-  }
-
-  moveDisplacedPlayer(player, targetTile, _teleportPlayer, playerStep) {
-    const graardor = this.lastWorld?.getNpc(graardorActorId);
-    if (
-      graardor?.alive &&
-      player.attackTarget === null &&
-      isRedXObjectTile(targetTile) &&
-      areFootprintsOverlapping(graardor, {
-        position: playerStep.position,
-        size: player.size,
-      })
-    ) {
-      this.redXStallUntilTick = Math.max(
-        this.redXStallUntilTick,
-        this.currentTick + redXStallDurationTicks,
-      );
-    }
-    return undefined;
   }
 
   processNpcTick(npc, context) {
@@ -687,7 +671,7 @@ export class GeneralGraardorEncounter {
       state: {
         startMode: this.standardDoorStart ? startModeStandardDoor : startModeAltarDoor,
         spawnMinions: this.spawnMinions,
-        redXStallUntilTick: this.redXStallUntilTick,
+        redXInteractionActive: this.redXInteractionActive,
       },
       visuals: {},
     };
