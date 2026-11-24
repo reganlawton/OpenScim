@@ -104,7 +104,8 @@ export const generalGraardorPresentation = (BaseScene) => ({
   kind: generalGraardorKind,
   renderConfig,
   sceneBuilder: (context) => buildScene(BaseScene, renderConfig, context),
-  defaultCamera: { yaw: 1024, pitch: -45, zoom: 512 },
+  // Camera yaw is in degrees: face north so the west entry wall does not hide the Standard start.
+  defaultCamera: { yaw: 0, pitch: -45, zoom: 512 },
   presentation: {
     title: "General Graardor",
     tagline: "Bandos' Stronghold — 6:0 Altar-Door kiting, standard door entry & minion tanking.",
