@@ -55,7 +55,7 @@ function rollNpcAccuracyAndDamage(rollOptions) {
         ...decisionKey,
         site: "npc.attack.damage",
       },
-      0,
+      Math.min(Math.max(0, Math.trunc(rollOptions.minHitOverride ?? 0)), Math.max(0, Math.trunc(maxHit))),
       Math.max(0, Math.trunc(maxHit)),
     ),
   };
@@ -86,6 +86,7 @@ function rollNpcAttackAgainstNpc(rollOptions) {
         : {
             maxHitOverride: rollOptions.maxHitOverride,
           }),
+      minHitOverride: rollOptions.minHitOverride,
     });
   } else {
     return null;
@@ -120,6 +121,7 @@ function rollNpcAttack(attackOptions) {
             target.offensivePrayer,
           ),
           style: plan.formulaStyle,
+          minHitOverride: plan.minHit,
           random: random,
           ...labelledOptions,
           ...(plan.maxHit === undefined
@@ -132,6 +134,7 @@ function rollNpcAttack(attackOptions) {
           attacker: attackerFormulaStats,
           target: target,
           style: plan.formulaStyle,
+          minHitOverride: plan.minHit,
           random: random,
           ...labelledOptions,
           ...(plan.maxHit === undefined

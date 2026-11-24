@@ -55,8 +55,9 @@ const rangedMagicMinionAttackRange = 16; // WIKI: Steelwill and Grimspike attack
 
 const graardorMeleeMaxHit = 60; // WIKI, TABLE
 const graardorRangedMaxHit = 35; // WIKI: Shockwave ranged attack max hit 35
+const graardorRangedMinHit = 15; // WIKI: General Graardor, Mod Ash (23 October 2018): uniform 15–35 inclusive on a successful hit
 const strongstackMaxHit = 15; // WIKI, TABLE
-const steelwillMaxHit = 16; // WIKI, TABLE
+const steelwillMaxHit = 15; // WIKI: Sergeant Steelwill magic max hit (https://oldschool.runescape.wiki/w/Sergeant_Steelwill)
 const grimspikeMaxHit = 21; // WIKI, TABLE
 
 const graardorRangedChanceDenominator = 3; // WIKI: 1/3 chance to use ranged shockwave when in melee distance
@@ -157,6 +158,7 @@ const graardorDefinition = defineNpc({
           damageType: "range",
           attackKind: "range_arrow",
           maxHit: graardorRangedMaxHit,
+          minHit: graardorRangedMinHit,
           projectile: graardorRangedProjectile.timing,
           sourceDeathPolicy: "cancel-before-impact",
         }
