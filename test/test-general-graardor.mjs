@@ -1,10 +1,11 @@
 // General Graardor (/general-graardor/): loads in Bandos' Stronghold (region
-// 11347, plane 2 shifted to level 0) with the Crystal (Bowfa) default gear
-// setup (Ring of suffering (i) worn, Toxic blowpipe in inventory), the
-// Altar-Door (6:0) tile marker preset active by default, clickable red-X
-// interactions on both the Big door and the Bandos altar, bodyguard minions
-// attacking immediately from tick 1, and victory upon General Graardor's death
-// without needing to finish off the minions.
+// 11347, plane 2 normalized to level 0 ground elevation) with the Crystal (Bowfa)
+// default gear setup (Ring of suffering (i) worn, Toxic blowpipe in inventory),
+// the Altar-Door (6:0) tile marker preset active by default, clickable red-X
+// 3D ray intersections on both the Big door and the Bandos altar, support for
+// both Altar-Door (6:0) and Standard (Door Entry) starting positions, bodyguard
+// minions attacking immediately from tick 1, and victory upon General Graardor's
+// death without needing to finish off the minions.
 import assert from "node:assert/strict";
 import { chromium } from "playwright-core";
 
@@ -58,6 +59,7 @@ try {
     .waitForFunction(
       () =>
         scene.isTerrainLoaded() &&
+        scene.isLocsLoaded() &&
         scene.isPlayerLoaded() &&
         scene.isNpcLoaded() &&
         scene.isNpcTypeLoaded(2215) &&
@@ -72,6 +74,7 @@ try {
         "SCENE DEBUG:",
         await page.evaluate(() => ({
           isTerrainLoaded: scene.isTerrainLoaded(),
+          isLocsLoaded: scene.isLocsLoaded(),
           isPlayerLoaded: scene.isPlayerLoaded(),
           isNpcLoaded: scene.isNpcLoaded(),
           npcTypes: [2215, 2216, 2217, 2218].map((id) => [id, scene.isNpcTypeLoaded(id)]),
@@ -85,10 +88,13 @@ try {
     });
 
   // Verify default Crystal (Bowfa) setup with Ring of suffering (i) and Toxic blowpipe,
-  // default Altar-Door (6:0) tile markers, and interactive Big door + Bandos altar map objects.
+  // normalized terrain elevation near z = 0 so 3D object picking works for the Bandos
+  // altar and Big door, and both Altar-Door (6:0) and Standard (Door Entry) start modes.
   const initialCheck = await page.evaluate(() => {
     const player = engine.player();
+    const equipment = { ...player.equipment };
     const inventoryIds = player.inventory.filter(Boolean).map((entry) => entry.id);
+    const blowpipeDartId = player.combatSupplies?.blowpipe?.id ?? null;
     const npcs = [...engine.worldState.actors.values()]
       .filter((actor) => actor.kind === "npc")
       .map((npc) => ({
@@ -96,16 +102,37 @@ try {
         npcTypeId: npc.npcTypeId,
         role: npc.role,
         hp: npc.vitals.hp,
+        position: [...npc.position],
         targetId: npc.combat.targetId,
       }));
     const replacements = scene.encounterRenderConfig.locRender?.replacements ?? [];
+    const terrainHeights = scene.getTerrainHeights?.();
+    const altarGroundZ = terrainHeights ? -terrainHeights[54][58] / 128 : null;
+    const doorGroundZ = terrainHeights ? -terrainHeights[47][42] / 128 : null;
+
+    // Test Standard (Door Entry) mode via mechanicsConfig
+    engine.reset(undefined, undefined, { graardorStartMode: "standard_door" });
+    const standardPlayerStart = [...engine.player().position];
+    const standardGraardorStart = [...engine.worldState.actors.get("general_graardor").position];
+    const standardGrimspikeStart = [...engine.worldState.actors.get("sergeant_grimspike").position];
+
+    // Restore default Altar-Door mode and equipment
+    engine.reset(undefined, undefined, { graardorStartMode: "altar_door" });
+    engine.setEquipment(equipment);
+    const playerStart = [...engine.player().position];
+
     return {
-      equipment: player.equipment,
+      equipment,
       hasBlowpipeInInventory: inventoryIds.includes(12926),
-      blowpipeDartId: player.combatSupplies?.blowpipe?.id ?? null,
-      playerStart: [...player.position],
+      blowpipeDartId,
+      playerStart,
       npcs,
-      doorReplacement: replacements.find((r) => r.targetLocId === 40419) ?? null,
+      doorReplacementCount: replacements.filter((r) => r.targetLocId === 40419).length,
+      altarGroundZ,
+      doorGroundZ,
+      standardPlayerStart,
+      standardGraardorStart,
+      standardGrimspikeStart,
     };
   });
 
@@ -116,22 +143,31 @@ try {
   assert.equal(initialCheck.equipment.ring, 19710, "Ring of suffering (i) equipped by default");
   assert.equal(initialCheck.hasBlowpipeInInventory, true, "Toxic blowpipe in inventory by default");
   assert.equal(initialCheck.blowpipeDartId, 11230, "Toxic blowpipe loaded with dragon darts");
-  assert.deepEqual(initialCheck.playerStart, [54, 57], "Starts on north Shoot->door tile");
-  assert.deepEqual(initialCheck.doorReplacement, {
-    sourceLocId: 26503,
-    localX: 47,
-    localY: 42,
-    targetLocId: 40419,
-    targetRotation: 0,
-  });
+  assert.deepEqual(initialCheck.playerStart, [54, 57], "Altar-Door mode starts on north Shoot->door tile");
+  assert.equal(initialCheck.doorReplacementCount, 3, "All 3 Big door tiles (47, 41..43) replaced with interactive 40419");
+  assert.ok(
+    initialCheck.altarGroundZ !== null &&
+      initialCheck.altarGroundZ >= -0.5 &&
+      initialCheck.altarGroundZ <= 1.5,
+    `Bandos altar ground Z (${initialCheck.altarGroundZ}) is normalized inside the [-0.5, 2] 3D ray picking box`,
+  );
+  assert.ok(
+    initialCheck.doorGroundZ !== null &&
+      initialCheck.doorGroundZ >= -0.5 &&
+      initialCheck.doorGroundZ <= 1.5,
+    `Big door ground Z (${initialCheck.doorGroundZ}) is normalized inside the [-0.5, 2] 3D ray picking box`,
+  );
+  assert.deepEqual(initialCheck.standardPlayerStart, [48, 42], "Standard mode starts at the west Big door (48, 42)");
+  assert.deepEqual(initialCheck.standardGraardorStart, [56, 47], "Standard mode spawns General Graardor at default (56, 47)");
+  assert.deepEqual(initialCheck.standardGrimspikeStart, [52, 50], "Standard mode spawns Sergeant Grimspike at default (52, 50)");
   assert.equal(initialCheck.npcs.length, 4);
   for (const npc of initialCheck.npcs) {
     assert.equal(npc.targetId, "player", `${npc.id} spawns targeting the player`);
   }
 
-  // Test red-X stall when walking under General Graardor toward the Big door (47, 42),
-  // minions attacking immediately, and victory triggering as soon as General Graardor
-  // dies while the three minions are still alive.
+  // Test red-X stall when walking under General Graardor toward the Big door (47, 42)
+  // and toward the Bandos altar (54, 59), minions attacking immediately, and victory
+  // triggering as soon as General Graardor dies while the three minions are still alive.
   const fightResult = await page.evaluate(() => {
     engine.reset();
     const graardor = engine.worldState.actors.get("general_graardor");
@@ -190,7 +226,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "General Graardor encounter loaded on /general-graardor/, verified Crystal Bowfa setup, Altar-Door red-X stall, minion tanking, and boss-kill victory",
+    "General Graardor encounter loaded on /general-graardor/, verified Crystal Bowfa setup, Altar & Door 3D red-X bounds, Standard Door & Altar-Door modes, and boss-kill victory",
   );
 } finally {
   await browser.close();

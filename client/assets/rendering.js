@@ -9398,6 +9398,13 @@ var Xm = class e {
       }
     }
     if ((e === 44 || e === 45) && (a === 82 || a === 83)) {
+      const n = s.tileHeights[2][32][32] | 0;
+      for (let e = 0; e <= 64; e++) {
+        for (let a = 0; a <= 64; a++) {
+          s.tileHeights[2][e][a] -= n;
+          s.tileHeights[3][e][a] -= n;
+        }
+      }
       for (const t of [
         s.tileHeights,
         s.tileUnderlays,

@@ -1,7 +1,11 @@
-// General Graardor (client/encounters/general-graardor/). He starts at 52,50
-// (4x4, 255 hitpoints) with Sergeant Strongstack (50,46), Sergeant Steelwill
-// (56,40) and Sergeant Grimspike (50,50) all targeting the player from tick 1.
-// The player starts at 54,57 ("Shoot->door" in front of the Bandos altar).
+// General Graardor (client/encounters/general-graardor/). Supports two starting
+// modes via graardorStartMode:
+// - "altar_door" (default): player at 54,57 ("Shoot->door" in front of the
+//   Bandos altar), General Graardor at 52,50 (4x4, 255 hitpoints) on the 6:0
+//   lane, Sergeant Strongstack (50,46), Sergeant Steelwill (56,40) and Sergeant
+//   Grimspike (50,50).
+// - "standard_door": player at 48,42 (inside the west Big door), General
+//   Graardor at his default spawn 56,47, and Sergeant Grimspike at 52,50.
 import { attack, command, equip, item, offensive, protect, special } from "./common.mjs";
 
 const KIND = "general_graardor";
@@ -103,6 +107,47 @@ export const scenarios = [
         offensive(api, "Rigour");
       }
       stepAltarDoorCycle(tick, api);
+    },
+  },
+  {
+    // Standard room entry (graardorStartMode: "standard_door"): player spawns at
+    // the west Big door (48, 42) with General Graardor at his default spawn
+    // (56, 47), runs onto the 6:0 lane at (54, 42) -> (54, 57) while shooting
+    // Graardor, and enters the Altar-Door cycle.
+    name: "general-graardor/standard-door-entry",
+    kind: KIND,
+    seed: 11,
+    ticks: 80,
+    mechanics: { graardorStartMode: "standard_door", infiniteHealth: true },
+    ...crystalBowfaGear,
+    inventory: [item.toxicBlowpipe, item.superRestore],
+    script(tick, api) {
+      if (tick === 1) {
+        protect(api, "ProtectMagic");
+        offensive(api, "Rigour");
+        api.moveTo(54, 42);
+      }
+      if (tick === 4) {
+        attack(api, BOSS);
+      }
+      if (tick === 5) {
+        attack(api, null);
+        api.moveTo(...bandosAltarCenterTile);
+      }
+      if (tick === 8 || tick === 12) {
+        attack(api, BOSS);
+      }
+      if (tick === 9) {
+        attack(api, null);
+        api.moveTo(54, 54);
+      }
+      if (tick === 13) {
+        attack(api, null);
+        api.moveTo(54, 57);
+      }
+      if (tick >= 17) {
+        stepAltarDoorCycle(tick - 16, api);
+      }
     },
   },
   {

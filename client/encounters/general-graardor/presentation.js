@@ -1,5 +1,6 @@
 import { buildScene } from "../shared/buildScene.js";
 import {
+  altarDoorGraardorStart,
   generalGraardorKind,
   generalGraardorMapSquare,
   graardorActorId,
@@ -15,11 +16,25 @@ const renderConfig = {
     bounds: null,
     levels: [0, 1],
     replacements: [
-      // CACHE: loc 26503 at (47, 42) is the varbit wrapper for the Bandos entrance door; 40419 is the interactive "Big door".
+      // CACHE: loc 26503 at (47, 42) and flanking doorway frame walls 26509/26511 at (47, 41..43) are replaced with 40419 ("Big door") so the entire 3-tile doorway has a red-X clickbox.
       {
         sourceLocId: 26503,
         localX: 47,
         localY: 42,
+        targetLocId: 40419,
+        targetRotation: 0,
+      },
+      {
+        sourceLocId: 26511,
+        localX: 47,
+        localY: 41,
+        targetLocId: 40419,
+        targetRotation: 0,
+      },
+      {
+        sourceLocId: 26509,
+        localX: 47,
+        localY: 43,
         targetLocId: 40419,
         targetRotation: 0,
       },
@@ -28,7 +43,7 @@ const renderConfig = {
   primaryNpc: {
     actorId: graardorActorId,
     npcTypeId: graardorNpcTypeId,
-    basePosition: [52, 50], // inferred: General Graardor spawn tile
+    basePosition: altarDoorGraardorStart, // inferred: General Graardor default spawn tile
     size: 4, // CACHE, TABLE: 4x4 footprint
     deathSeqId: 7020, // CACHE: General Graardor death sequence
   },
@@ -92,11 +107,11 @@ export const generalGraardorPresentation = (BaseScene) => ({
   defaultCamera: { yaw: 1024, pitch: -45, zoom: 512 },
   presentation: {
     title: "General Graardor",
-    tagline: "Bandos' Stronghold — 6:0 Altar-Door kiting & minion tanking.",
+    tagline: "Bandos' Stronghold — 6:0 Altar-Door kiting, standard door entry & minion tanking.",
     blurb:
-      "General Graardor and his three bodyguards — Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike — attack together in Bandos' Stronghold. Practice the 6:0 Altar-Door red-X cycle with the Crystal bow of faerdhinen setup, or test your tanking and damage taken while kiting.",
+      "General Graardor and his three bodyguards — Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike — attack together in Bandos' Stronghold. Practice the 6:0 Altar-Door red-X cycle from the altar or start at the west Big door with General Graardor at his default spawn to practice entering the room and getting into cycle.",
     setupContext:
-      "The Altar-Door (6:0) tile markers are enabled by default. Both the Big door on the west wall and the Bandos altar on the north wall can be red-X clicked to pass under General Graardor without being attacked. Defeating General Graardor completes the fight immediately.",
+      "Choose between Altar-Door (6:0) or Standard (Door Entry) starting positions. Both the Big door on the west wall and the Bandos altar on the north wall can be red-X clicked to pass under General Graardor without being attacked. Defeating General Graardor completes the fight immediately.",
     wikiUrl: "https://oldschool.runescape.wiki/w/General_Graardor/Strategies",
   },
 });

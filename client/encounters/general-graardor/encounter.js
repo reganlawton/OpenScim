@@ -20,6 +20,9 @@ export const strongstackActorId = "sergeant_strongstack";
 export const steelwillActorId = "sergeant_steelwill";
 export const grimspikeActorId = "sergeant_grimspike";
 
+export const startModeKey = "graardorStartMode";
+export const startModeAltarDoor = "altar_door";
+export const startModeStandardDoor = "standard_door";
 export const spawnMinionsKey = "graardorSpawnMinions";
 export const healGraardorCommand = {
   encounter: generalGraardorKind,
@@ -27,15 +30,22 @@ export const healGraardorCommand = {
 };
 
 // North "Shoot->door" tile of the 6:0 Altar-Door lane (x = 54), directly in front of the Bandos altar at (53..55, 58..60).
-const playerStart = [54, 57]; // WIKI, OBS: Region 11347 Altar-Door north endpoint
-const graardorStart = [52, 50]; // inferred: 4x4 footprint centered on the x = 54 Altar-Door lane (x: 52..55, y: 50..53)
+export const altarDoorPlayerStart = [54, 57]; // WIKI, OBS: Region 11347 Altar-Door north endpoint
+export const altarDoorGraardorStart = [52, 50]; // inferred: 4x4 footprint centered on the x = 54 Altar-Door lane (x: 52..55, y: 50..53)
+export const altarDoorGrimspikeStart = [50, 50]; // inferred: world (2868, 5362, 2) shifted 2 tiles west off the boss lane
+
+// Standard room entry: player steps through the Big door at (47, 42) onto (48, 42) while General Graardor and his bodyguards stand at their default spawns.
+export const standardDoorPlayerStart = [48, 42]; // WIKI, OBS: world (2864, 5354, 2) -> local (48, 42), inside the west Big door
+export const standardGraardorStart = [56, 47]; // OBS: world (2872, 5359, 2) -> local (56, 47), default Bandos room spawn
+export const standardGrimspikeStart = [52, 50]; // OBS: world (2868, 5362, 2) -> local (52, 50)
+
 const strongstackStart = [50, 46]; // OBS: world (2866, 5358, 2) -> local (50, 46)
 const steelwillStart = [56, 40]; // OBS: world (2872, 5352, 2) -> local (56, 40)
-const grimspikeStart = [50, 50]; // inferred: world (2868, 5362, 2) shifted 2 tiles west off the boss lane
 
 const graardorSize = 4; // CACHE, TABLE
 const minionSize = 1; // CACHE, TABLE
 const southFacing = 0; // CACHE: 0 in 2048ths of a turn faces south
+const westFacing = 512; // CACHE: 512 in 2048ths of a turn faces west
 const northFacing = 1024; // CACHE: 1024 in 2048ths of a turn faces north
 
 const graardorAttackSpeedTicks = 6; // WIKI, TABLE: 6 ticks (3.6 seconds)
@@ -94,13 +104,25 @@ const grimspikeRangedProjectile = {
   endHeight: 36, // inferred
 };
 
+function isStandardDoorMode(mechanics) {
+  return mechanics?.[startModeKey] === startModeStandardDoor;
+}
+
+function getGraardorStartForMode(standardDoor) {
+  return standardDoor ? standardGraardorStart : altarDoorGraardorStart;
+}
+
+function getGrimspikeStartForMode(standardDoor) {
+  return standardDoor ? standardGrimspikeStart : altarDoorGrimspikeStart;
+}
+
 function isRedXObjectTile(tile) {
   if (!Array.isArray(tile) || tile.length < 2) {
     return false;
   }
   const [x, y] = tile;
-  // Big door at (47, 42) on the west wall, or Bandos altar at (53..55, 58..60) on the north wall (CACHE).
-  return (x === 47 && y === 42) || (x >= 53 && x <= 55 && y >= 58 && y <= 60);
+  // Big door at (47, 41..43) on the west wall, or Bandos altar at (53..55, 58..60) on the north wall (CACHE).
+  return (x === 47 && y >= 41 && y <= 43) || (x >= 53 && x <= 55 && y >= 58 && y <= 60);
 }
 
 const graardorDefinition = defineNpc({
@@ -399,10 +421,11 @@ function buildNpcActor({
 
 export class GeneralGraardorEncounter {
   kind = generalGraardorKind;
-  runStartMechanicsKeys = [spawnMinionsKey];
+  runStartMechanicsKeys = [startModeKey, spawnMinionsKey];
   encounterSeed = 1;
   random = createSeededRandom(1);
   outcome = activeOutcome;
+  standardDoorStart = false;
   spawnMinions = true;
   currentTick = 0;
   redXStallUntilTick = -1;
@@ -440,15 +463,58 @@ export class GeneralGraardorEncounter {
   }
 
   getDefaultMechanicsConfig() {
-    return { [spawnMinionsKey]: true };
+    return {
+      [startModeKey]: startModeAltarDoor,
+      [spawnMinionsKey]: true,
+    };
   }
 
-  configureRunStart(mechanics) {
+  configureRunStart(mechanics, runStartContext) {
+    const previousStandardDoor = this.standardDoorStart;
+    const previousSpawnMinions = this.spawnMinions;
+    this.standardDoorStart = isStandardDoorMode(mechanics);
     this.spawnMinions = mechanics[spawnMinionsKey] !== false;
+    if (!runStartContext) {
+      return;
+    }
+    const existingGraardor = runStartContext.world.getNpc(graardorActorId);
+    if (!existingGraardor) {
+      return;
+    }
+    if (previousStandardDoor !== this.standardDoorStart) {
+      runStartContext.placePlayer(this.getDefaultPlayerStart(mechanics));
+      const graardorPos = getGraardorStartForMode(this.standardDoorStart);
+      existingGraardor.position = [...graardorPos];
+      existingGraardor.previousPosition = [...graardorPos];
+      existingGraardor.facing = this.standardDoorStart ? westFacing : northFacing;
+      existingGraardor.history.clear();
+      existingGraardor.history.set(0, [...graardorPos]);
+      const existingGrimspike = runStartContext.world.getNpc(grimspikeActorId);
+      if (existingGrimspike) {
+        const grimspikePos = getGrimspikeStartForMode(this.standardDoorStart);
+        existingGrimspike.position = [...grimspikePos];
+        existingGrimspike.previousPosition = [...grimspikePos];
+        existingGrimspike.history.clear();
+        existingGrimspike.history.set(0, [...grimspikePos]);
+      }
+      runStartContext.world.occupancy.syncActors(runStartContext.world.actors.values());
+    }
+    if (previousSpawnMinions !== this.spawnMinions) {
+      for (const minionId of [strongstackActorId, steelwillActorId, grimspikeActorId]) {
+        runStartContext.despawnNpc(minionId);
+      }
+      if (this.spawnMinions) {
+        for (const minion of this.createMinionNpcs()) {
+          runStartContext.spawnNpc(minion);
+        }
+      }
+    }
   }
 
-  getDefaultPlayerStart() {
-    return [...playerStart];
+  getDefaultPlayerStart(mechanics = {}) {
+    return isStandardDoorMode(mechanics)
+      ? [...standardDoorPlayerStart]
+      : [...altarDoorPlayerStart];
   }
 
   getIntroConfig() {
@@ -465,6 +531,50 @@ export class GeneralGraardorEncounter {
     };
   }
 
+  createMinionNpcs() {
+    return [
+      buildNpcActor({
+        definition: strongstackDefinition,
+        id: strongstackActorId,
+        role: "minion",
+        npcTypeId: strongstackNpcTypeId,
+        archetypeId: "sergeant_strongstack",
+        size: minionSize,
+        position: strongstackStart,
+        facing: northFacing,
+        attackSpeed: minionAttackSpeedTicks,
+        attackRange: meleeAttackRange,
+        attackStyle: "melee",
+      }),
+      buildNpcActor({
+        definition: steelwillDefinition,
+        id: steelwillActorId,
+        role: "minion",
+        npcTypeId: steelwillNpcTypeId,
+        archetypeId: "sergeant_steelwill",
+        size: minionSize,
+        position: steelwillStart,
+        facing: northFacing,
+        attackSpeed: minionAttackSpeedTicks,
+        attackRange: rangedMagicMinionAttackRange,
+        attackStyle: "magic",
+      }),
+      buildNpcActor({
+        definition: grimspikeDefinition,
+        id: grimspikeActorId,
+        role: "minion",
+        npcTypeId: grimspikeNpcTypeId,
+        archetypeId: "sergeant_grimspike",
+        size: minionSize,
+        position: getGrimspikeStartForMode(this.standardDoorStart),
+        facing: southFacing,
+        attackSpeed: minionAttackSpeedTicks,
+        attackRange: rangedMagicMinionAttackRange,
+        attackStyle: "range",
+      }),
+    ];
+  }
+
   createNpcs() {
     const npcs = [
       buildNpcActor({
@@ -474,55 +584,15 @@ export class GeneralGraardorEncounter {
         npcTypeId: graardorNpcTypeId,
         archetypeId: "general_graardor",
         size: graardorSize,
-        position: graardorStart,
-        facing: northFacing,
+        position: getGraardorStartForMode(this.standardDoorStart),
+        facing: this.standardDoorStart ? westFacing : northFacing,
         attackSpeed: graardorAttackSpeedTicks,
         attackRange: meleeAttackRange,
         attackStyle: "melee",
       }),
     ];
     if (this.spawnMinions) {
-      npcs.push(
-        buildNpcActor({
-          definition: strongstackDefinition,
-          id: strongstackActorId,
-          role: "minion",
-          npcTypeId: strongstackNpcTypeId,
-          archetypeId: "sergeant_strongstack",
-          size: minionSize,
-          position: strongstackStart,
-          facing: northFacing,
-          attackSpeed: minionAttackSpeedTicks,
-          attackRange: meleeAttackRange,
-          attackStyle: "melee",
-        }),
-        buildNpcActor({
-          definition: steelwillDefinition,
-          id: steelwillActorId,
-          role: "minion",
-          npcTypeId: steelwillNpcTypeId,
-          archetypeId: "sergeant_steelwill",
-          size: minionSize,
-          position: steelwillStart,
-          facing: northFacing,
-          attackSpeed: minionAttackSpeedTicks,
-          attackRange: rangedMagicMinionAttackRange,
-          attackStyle: "magic",
-        }),
-        buildNpcActor({
-          definition: grimspikeDefinition,
-          id: grimspikeActorId,
-          role: "minion",
-          npcTypeId: grimspikeNpcTypeId,
-          archetypeId: "sergeant_grimspike",
-          size: minionSize,
-          position: grimspikeStart,
-          facing: southFacing,
-          attackSpeed: minionAttackSpeedTicks,
-          attackRange: rangedMagicMinionAttackRange,
-          attackStyle: "range",
-        }),
-      );
+      npcs.push(...this.createMinionNpcs());
     }
     return npcs;
   }
@@ -613,6 +683,7 @@ export class GeneralGraardorEncounter {
     return {
       kind: this.kind,
       state: {
+        startMode: this.standardDoorStart ? startModeStandardDoor : startModeAltarDoor,
         spawnMinions: this.spawnMinions,
         redXStallUntilTick: this.redXStallUntilTick,
       },
@@ -643,11 +714,11 @@ export const generalGraardorDefinition = {
     kind: generalGraardorKind,
     displayName: "General Graardor",
     description:
-      "Bandos' Stronghold boss fight with Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike. Practice the 6:0 Altar-Door red-X method and minion tanking.",
+      "Bandos' Stronghold boss fight with Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike. Practice the 6:0 Altar-Door red-X method or standard door entry and minion tanking.",
     mapSquare: generalGraardorMapSquare,
-    playerStart,
+    playerStart: altarDoorPlayerStart,
     loadsMapLocs: true,
-    collision: { mode: "auto", seed: playerStart },
+    collision: { mode: "auto", seed: altarDoorPlayerStart },
     victory: {
       title: "VICTORY",
       narrative: "GENERAL GRAARDOR DEFEATED",
@@ -655,8 +726,28 @@ export const generalGraardorDefinition = {
     },
   },
   controls: {
-    defaultMechanicsConfig: { [spawnMinionsKey]: true },
+    defaultMechanicsConfig: {
+      [startModeKey]: startModeAltarDoor,
+      [spawnMinionsKey]: true,
+    },
     mechanicsToggles: [
+      {
+        key: startModeKey,
+        label: "Starting Position",
+        compactLabel: "Start",
+        setup: true,
+        choices: [
+          {
+            value: startModeAltarDoor,
+            label: "Altar-Door (6:0)",
+          },
+          {
+            value: startModeStandardDoor,
+            label: "Standard (Door Entry)",
+          },
+        ],
+        info: "Altar-Door (6:0) starts on the north altar tile with General Graardor aligned on the 6:0 lane. Standard (Door Entry) starts at the west Big door with General Graardor at his default spawn.",
+      },
       { key: spawnMinionsKey, label: "Spawn bodyguard minions", setup: true },
     ],
     debugActions: [
