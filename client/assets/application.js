@@ -5643,7 +5643,7 @@ var _le = {
   },
   // General Graardor (client/encounters/general-graardor/): solo gear setups from the OSRS Wiki
   // strategy guide (General Graardor/Strategies). Defaults to the Crystal (Bow of faerdhinen) setup
-  // with Ring of suffering (i) and Toxic blowpipe for 6:0 Altar-Door kiting and minion tanking/healing.
+  // with Ring of suffering (i) and Toxic blowpipe for Altar-Door and 6:0 kiting, and minion tanking/healing.
   general_graardor: {
     crystal: {
       name: "Crystal (Bowfa)",
@@ -30668,16 +30668,16 @@ var Qfe = {
   toa_nexus: {name:"Tombs of Amascut",description:"The nexus",buildRoute:path=>({path,title:"Tombs of Amascut | OpenScim.dev",description:"Tombs of Amascut nexus",h1:"Tombs of Amascut",intro:"The nexus",keywords:["Tombs of Amascut"],ogImagePath:Jfe,breadcrumbs:[{name:"Tombs of Amascut",path}],jsonLd:[],noindex:true})},
   general_graardor: {
     name: "General Graardor",
-    description: "Practice the General Graardor 6:0 Altar-Door method and minion tanking.",
+    description: "Practice General Graardor with Standard entry, Altar-Door, or 6:0 ranged kiting.",
     buildRoute: function (h2) {
       return {
         path: h2,
         title: "General Graardor Simulator | OpenScim.dev",
         description:
-          "Practice General Graardor and his three bodyguards in Bandos' Stronghold. Drill the 6:0 Altar-Door red-X method and test your minion tanking in your browser.",
+          "Practice General Graardor and his three bodyguards in Bandos' Stronghold with Standard entry, Altar-Door red-X, or 6:0 ranged kiting in your browser.",
         h1: "General Graardor Boss Simulator",
         intro:
-          "General Graardor is the leader of Bandos' forces in the God Wars Dungeon, accompanied by Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike. Practice the 6:0 Altar-Door method with red-X clicks on the Big door and Bandos altar.",
+          "General Graardor is the leader of Bandos' forces in the God Wars Dungeon, accompanied by Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike. Choose Standard entry, the Altar-Door red-X method, or the separate 6:0 ranged kiting route.",
         keywords: [
           "General Graardor",
           "OSRS Bandos",
@@ -38205,13 +38205,13 @@ var Jbe = [
       Hbe(26, 34, Kbe),
     ],
   },
-  // General Graardor (client/encounters/general-graardor/): the 6:0 Altar-Door
+  // General Graardor (client/encounters/general-graardor/): the Altar-Door
   // RuneLite ground markers for region 11347 (Bandos' Stronghold).
   {
     id: "general_graardor_altar_door",
-    name: "Altar-Door (6:0)",
+    name: "Altar-Door",
     description:
-      "6:0 Altar-Door kiting lane between the Bandos altar and the Big door (Region 11347)",
+      "Altar-Door red-X lane between the Bandos altar and the Big door (Region 11347)",
     encounterKind: "general_graardor",
     link: "https://oldschool.runescape.wiki/w/General_Graardor/Strategies",
     defaultActive: true,
@@ -38222,6 +38222,24 @@ var Jbe = [
       Hbe(54, 48, "#FFD81414", "A"),
       Hbe(54, 45, "#FF14D74F", "D"),
       Hbe(54, 42, "#FFD81414", "Shoot->altar"),
+    ],
+  },
+  // OBS: User-supplied RuneLite 6:0 markers, region 11347, plane 2.
+  // The scene normalizes plane 2 to ground level; Hbe uses region-local tiles.
+  {
+    id: "general_graardor_six_zero",
+    name: "6:0",
+    description: "6:0 ranged kiting route around Bandos' Stronghold (Region 11347)",
+    encounterKind: "general_graardor",
+    defaultActive: false,
+    markers: [
+      Hbe(60, 39, "#FFF8EA09"),
+      Hbe(48, 39, "#FFF8EA09"),
+      Hbe(48, 57, "#FFF8EA09"),
+      Hbe(60, 54, "#FFF8EA09"),
+      Hbe(48, 49, "#FFF8EA09"),
+      Hbe(60, 46, "#FFF8EA09"),
+      Hbe(57, 40, "#FFF8EA09", "start"),
     ],
   },
   // The waves of the Colosseum (client/encounters/colosseum/): the ground

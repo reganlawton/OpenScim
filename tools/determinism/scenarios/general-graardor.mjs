@@ -1,11 +1,12 @@
-// General Graardor (client/encounters/general-graardor/). Supports two starting
+// General Graardor (client/encounters/general-graardor/). Supports three starting
 // modes via graardorStartMode:
 // - "altar_door": player at 54,57 ("Shoot->door" in front of the
-//   Bandos altar), General Graardor at 52,50 (4x4, 255 hitpoints) on the 6:0
+//   Bandos altar), General Graardor at 52,50 (4x4, 255 hitpoints) on the Altar-Door
 //   lane, Sergeant Strongstack (50,46), Sergeant Steelwill (56,40) and Sergeant
 //   Grimspike (50,50).
 // - "standard_door" (default): player at 48,42 (inside the west Big door), General
 //   Graardor at his default spawn 56,47, and Sergeant Grimspike at 52,50.
+// - "six_zero": player at the supplied 6:0 start marker 57,40, normal NPC spawns.
 import { attack, command, equip, item, offensive, protect, special } from "./common.mjs";
 
 const KIND = "general_graardor";
@@ -32,7 +33,7 @@ const crystalBowfaGear = {
 const bigDoorTile = [47, 42];
 const bandosAltarCenterTile = [54, 59];
 
-// One 24-tick 6:0 Altar-Door lap on x = 54:
+// One 24-tick Altar-Door lap on x = 54:
 // This is the existing scripted route, not proof of a damage-free game method:
 // Red-X stalls only during overlap, so an exit shot can now allow retaliation.
 //   cycleTick  0: at (54, 57) "Shoot->door", shoot Graardor
@@ -91,7 +92,20 @@ function stepAltarDoorCycle(tick, api) {
 
 export const scenarios = [
   {
-    // 6:0 Altar-Door kiting in the Crystal (Bow of faerdhinen) setup with Ring
+    // OBS: user's region 11347 6:0 start marker; inferred: normal NPC spawns.
+    // Exercises the new setup and replay without inventing a timed 6:0 cycle.
+    name: "general-graardor/six-zero-start",
+    kind: KIND,
+    seed: 17,
+    ticks: 30,
+    mechanics: { graardorStartMode: "six_zero", infiniteHealth: true },
+    ...crystalBowfaGear,
+    script(tick, api) {
+      if (tick === 1) attack(api, BOSS);
+    },
+  },
+  {
+    // Altar-Door kiting in the Crystal (Bow of faerdhinen) setup with Ring
     // of suffering (i) and Toxic blowpipe in inventory. Red-X clicking the Big
     // door at (54, 57) and the Bandos altar at (54, 42) stalls General Graardor
     // as the player passes under him; defeating Graardor completes the fight
@@ -114,7 +128,7 @@ export const scenarios = [
   {
     // Standard room entry (graardorStartMode: "standard_door"): player spawns at
     // the west Big door (48, 42) with General Graardor at his default spawn
-    // (56, 47), runs onto the 6:0 lane at (54, 42) -> (54, 57) while shooting
+    // (56, 47), runs onto the Altar-Door lane at (54, 42) -> (54, 57) while shooting
     // Graardor, and enters the Altar-Door cycle.
     name: "general-graardor/standard-door-entry",
     kind: KIND,

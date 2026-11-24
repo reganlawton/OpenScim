@@ -23,13 +23,14 @@ export const grimspikeActorId = "sergeant_grimspike";
 export const startModeKey = "graardorStartMode";
 export const startModeAltarDoor = "altar_door";
 export const startModeStandardDoor = "standard_door";
+export const startModeSixZero = "six_zero";
 export const spawnMinionsKey = "graardorSpawnMinions";
 export const healGraardorCommand = {
   encounter: generalGraardorKind,
   type: "heal-graardor",
 };
 
-// North "Shoot->door" tile of the 6:0 Altar-Door lane (x = 54), directly in front of the Bandos altar at (53..55, 58..60).
+// North "Shoot->door" tile of the Altar-Door lane (x = 54), directly in front of the Bandos altar at (53..55, 58..60).
 export const altarDoorPlayerStart = [54, 57]; // WIKI, OBS: Region 11347 Altar-Door north endpoint
 export const altarDoorGraardorStart = [52, 50]; // inferred: 4x4 footprint centered on the x = 54 Altar-Door lane (x: 52..55, y: 50..53)
 export const altarDoorGrimspikeStart = [50, 50]; // inferred: world (2868, 5362, 2) shifted 2 tiles west off the boss lane
@@ -38,6 +39,7 @@ export const altarDoorGrimspikeStart = [50, 50]; // inferred: world (2868, 5362,
 export const standardDoorPlayerStart = [48, 42]; // WIKI, OBS: world (2864, 5354, 2) -> local (48, 42), inside the west Big door
 export const standardGraardorStart = [56, 47]; // OBS: world (2872, 5359, 2) -> local (56, 47), default Bandos room spawn
 export const standardGrimspikeStart = [52, 50]; // OBS: world (2868, 5362, 2) -> local (52, 50)
+export const sixZeroPlayerStart = [57, 40]; // OBS: user-supplied RuneLite region 11347, plane 2 marker labelled "start"
 
 const strongstackStart = [50, 46]; // OBS: world (2866, 5358, 2) -> local (50, 46)
 const steelwillStart = [56, 40]; // OBS: world (2872, 5352, 2) -> local (56, 40)
@@ -104,8 +106,9 @@ const grimspikeRangedProjectile = {
   endHeight: 36, // inferred
 };
 
-function isStandardDoorMode(mechanics) {
-  return (mechanics?.[startModeKey] ?? startModeStandardDoor) === startModeStandardDoor;
+function getStartMode(mechanics) {
+  const mode = mechanics?.[startModeKey];
+  return mode === startModeAltarDoor || mode === startModeSixZero ? mode : startModeStandardDoor;
 }
 
 function getGraardorStartForMode(standardDoor) {
@@ -427,6 +430,7 @@ export class GeneralGraardorEncounter {
   random = createSeededRandom(1);
   outcome = activeOutcome;
   standardDoorStart = true;
+  startMode = startModeStandardDoor;
   spawnMinions = true;
   redXInteractionActive = false;
   definitions;
@@ -472,9 +476,11 @@ export class GeneralGraardorEncounter {
   }
 
   configureRunStart(mechanics, runStartContext) {
-    const previousStandardDoor = this.standardDoorStart;
+    const previousStartMode = this.startMode;
     const previousSpawnMinions = this.spawnMinions;
-    this.standardDoorStart = isStandardDoorMode(mechanics);
+    this.startMode = getStartMode(mechanics);
+    // Inferred: 6:0 uses the normal room spawns; only Altar-Door pre-aligns the boss.
+    this.standardDoorStart = this.startMode !== startModeAltarDoor;
     this.spawnMinions = mechanics[spawnMinionsKey] !== false;
     if (!runStartContext) {
       return;
@@ -483,7 +489,7 @@ export class GeneralGraardorEncounter {
     if (!existingGraardor) {
       return;
     }
-    if (previousStandardDoor !== this.standardDoorStart) {
+    if (previousStartMode !== this.startMode) {
       runStartContext.placePlayer(this.getDefaultPlayerStart(mechanics));
       const graardorPos = getGraardorStartForMode(this.standardDoorStart);
       existingGraardor.position = [...graardorPos];
@@ -514,7 +520,8 @@ export class GeneralGraardorEncounter {
   }
 
   getDefaultPlayerStart(mechanics = {}) {
-    return isStandardDoorMode(mechanics)
+    if (getStartMode(mechanics) === startModeSixZero) return [...sixZeroPlayerStart];
+    return getStartMode(mechanics) === startModeStandardDoor
       ? [...standardDoorPlayerStart]
       : [...altarDoorPlayerStart];
   }
@@ -669,7 +676,7 @@ export class GeneralGraardorEncounter {
     return {
       kind: this.kind,
       state: {
-        startMode: this.standardDoorStart ? startModeStandardDoor : startModeAltarDoor,
+        startMode: this.startMode,
         spawnMinions: this.spawnMinions,
         redXInteractionActive: this.redXInteractionActive,
       },
@@ -700,7 +707,7 @@ export const generalGraardorDefinition = {
     kind: generalGraardorKind,
     displayName: "General Graardor",
     description:
-      "Bandos' Stronghold boss fight with Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike. Practice the 6:0 Altar-Door red-X method or standard door entry and minion tanking.",
+      "Bandos' Stronghold boss fight with Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike. Practice standard door entry, the Altar-Door red-X method, or 6:0 ranged kiting.",
     mapSquare: generalGraardorMapSquare,
     playerStart: standardDoorPlayerStart,
     loadsMapLocs: true,
@@ -729,10 +736,14 @@ export const generalGraardorDefinition = {
           },
           {
             value: startModeAltarDoor,
-            label: "Altar-Door (6:0)",
+            label: "Altar-Door",
+          },
+          {
+            value: startModeSixZero,
+            label: "6:0",
           },
         ],
-        info: "Standard starts at the west Big door with General Graardor at his default spawn. Altar-Door (6:0) starts on the north altar tile with General Graardor already aligned on the 6:0 lane for practicing the cycle.",
+        info: "Standard starts at the west Big door. Altar-Door starts at the north altar tile with General Graardor aligned on the central lane. 6:0 starts on the southeast start marker with the normal room spawns. Altar-Door and 6:0 have separate tile marker presets.",
       },
       { key: spawnMinionsKey, label: "Spawn bodyguard minions", setup: true },
     ],

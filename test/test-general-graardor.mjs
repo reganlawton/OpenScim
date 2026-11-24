@@ -1,9 +1,9 @@
 // General Graardor (/general-graardor/): loads in Bandos' Stronghold (region
 // 11347, plane 2 normalized to level 0 ground elevation) with the Crystal (Bowfa)
 // default gear setup (Ring of suffering (i) worn, Toxic blowpipe in inventory),
-// the Altar-Door (6:0) tile marker preset active by default, clickable red-X
+// the Altar-Door tile marker preset active by default, clickable red-X
 // 3D ray intersections on both the Big door and the Bandos altar, support for
-// both Altar-Door (6:0) and Standard starting positions, bodyguard
+// Altar-Door, Standard, and 6:0 starting positions, bodyguard
 // minions attacking immediately from tick 1, and victory upon General Graardor's
 // death without needing to finish off the minions.
 import assert from "node:assert/strict";
@@ -26,6 +26,11 @@ try {
   page.on("console", (message) => /Empty container/.test(message.text()) && errors.push(message.text()));
 
   for (const [path, marker, probe] of [
+    [
+      "**/assets/application.js*",
+      "Xbe(Jbe);",
+      "window.graardorTilePresets = Jbe.filter(preset => preset.encounterKind === 'general_graardor');",
+    ],
     [
       "**/engine/SimulationEngine.js*",
       "this.encounter = options.encounter;",
@@ -53,6 +58,21 @@ try {
     () => document.title === "General Graardor Simulator | OpenScim.dev",
   );
   assert.equal(await page.evaluate(() => engine.getEncounterKind()), "general_graardor");
+  const presets = await page.evaluate(() => window.graardorTilePresets);
+  assert.deepEqual(presets.map((preset) => [preset.id, preset.name]), [
+    ["general_graardor_altar_door", "Altar-Door"],
+    ["general_graardor_six_zero", "6:0"],
+  ]);
+  assert.equal(presets[0].markers.length, 6, "Existing Altar-Door markers retained");
+  assert.deepEqual(presets[1].markers, [
+    { x: 60, y: 39, color: "#F8EA09", opacity: 1 },
+    { x: 48, y: 39, color: "#F8EA09", opacity: 1 },
+    { x: 48, y: 57, color: "#F8EA09", opacity: 1 },
+    { x: 60, y: 54, color: "#F8EA09", opacity: 1 },
+    { x: 48, y: 49, color: "#F8EA09", opacity: 1 },
+    { x: 60, y: 46, color: "#F8EA09", opacity: 1 },
+    { x: 57, y: 40, color: "#F8EA09", opacity: 1, label: "start" },
+  ], "All seven supplied RuneLite markers registered with exact colour and label");
 
   // Wait for terrain, player, map locations, and all 4 NPCs (General Graardor + 3 sergeants) to load.
   await page
@@ -89,7 +109,7 @@ try {
 
   // Verify default Crystal (Bowfa) setup with Ring of suffering (i) and Toxic blowpipe,
   // normalized terrain elevation near z = 0 so 3D object picking works for the Bandos
-  // altar and Big door, and both Altar-Door (6:0) and Standard start modes.
+  // altar and Big door, and Altar-Door, Standard, and 6:0 start modes.
   const initialCheck = await page.evaluate(() => {
     const defaultPlayerStart = [...engine.player().position];
     const defaultStartMode = engine.mechanicsConfig.graardorStartMode;
@@ -118,6 +138,11 @@ try {
     const standardGraardorStart = [...engine.worldState.actors.get("general_graardor").position];
     const standardGrimspikeStart = [...engine.worldState.actors.get("sergeant_grimspike").position];
 
+    engine.reset(undefined, undefined, { graardorStartMode: "six_zero" });
+    const sixZeroPlayerStart = [...engine.player().position];
+    const sixZeroGraardorStart = [...engine.worldState.actors.get("general_graardor").position];
+    const sixZeroStartMode = engine.getEncounterSnapshot().state.startMode;
+
     // Select Altar-Door mode for the red-X cycle checks
     engine.reset(undefined, undefined, { graardorStartMode: "altar_door" });
     engine.setEquipment(equipment);
@@ -137,6 +162,9 @@ try {
       standardPlayerStart,
       standardGraardorStart,
       standardGrimspikeStart,
+      sixZeroPlayerStart,
+      sixZeroGraardorStart,
+      sixZeroStartMode,
     };
   });
 
@@ -166,6 +194,9 @@ try {
   assert.deepEqual(initialCheck.standardPlayerStart, [48, 42], "Standard mode starts at the west Big door (48, 42)");
   assert.deepEqual(initialCheck.standardGraardorStart, [56, 47], "Standard mode spawns General Graardor at default (56, 47)");
   assert.deepEqual(initialCheck.standardGrimspikeStart, [52, 50], "Standard mode spawns Sergeant Grimspike at default (52, 50)");
+  assert.deepEqual(initialCheck.sixZeroPlayerStart, [57, 40], "6:0 starts at the supplied start marker");
+  assert.deepEqual(initialCheck.sixZeroGraardorStart, [56, 47], "6:0 uses the normal boss spawn");
+  assert.equal(initialCheck.sixZeroStartMode, "six_zero", "6:0 is a distinct third mode");
   assert.equal(initialCheck.npcs.length, 4);
   for (const npc of initialCheck.npcs) {
     assert.equal(npc.targetId, "player", `${npc.id} spawns targeting the player`);
@@ -232,7 +263,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "General Graardor encounter loaded on /general-graardor/, verified Crystal Bowfa setup, Altar & Door 3D red-X bounds, Standard Door & Altar-Door modes, and boss-kill victory",
+    "General Graardor encounter loaded on /general-graardor/, verified Crystal Bowfa setup, Altar & Door 3D red-X bounds, Standard, Altar-Door & 6:0 modes and marker presets, and boss-kill victory",
   );
 } finally {
   await browser.close();
