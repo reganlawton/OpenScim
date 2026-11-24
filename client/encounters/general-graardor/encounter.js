@@ -105,7 +105,7 @@ const grimspikeRangedProjectile = {
 };
 
 function isStandardDoorMode(mechanics) {
-  return mechanics?.[startModeKey] === startModeStandardDoor;
+  return (mechanics?.[startModeKey] ?? startModeStandardDoor) === startModeStandardDoor;
 }
 
 function getGraardorStartForMode(standardDoor) {
@@ -425,7 +425,7 @@ export class GeneralGraardorEncounter {
   encounterSeed = 1;
   random = createSeededRandom(1);
   outcome = activeOutcome;
-  standardDoorStart = false;
+  standardDoorStart = true;
   spawnMinions = true;
   currentTick = 0;
   redXStallUntilTick = -1;
@@ -464,7 +464,7 @@ export class GeneralGraardorEncounter {
 
   getDefaultMechanicsConfig() {
     return {
-      [startModeKey]: startModeAltarDoor,
+      [startModeKey]: startModeStandardDoor,
       [spawnMinionsKey]: true,
     };
   }
@@ -716,9 +716,9 @@ export const generalGraardorDefinition = {
     description:
       "Bandos' Stronghold boss fight with Sergeant Strongstack, Sergeant Steelwill, and Sergeant Grimspike. Practice the 6:0 Altar-Door red-X method or standard door entry and minion tanking.",
     mapSquare: generalGraardorMapSquare,
-    playerStart: altarDoorPlayerStart,
+    playerStart: standardDoorPlayerStart,
     loadsMapLocs: true,
-    collision: { mode: "auto", seed: altarDoorPlayerStart },
+    collision: { mode: "auto", seed: standardDoorPlayerStart },
     victory: {
       title: "VICTORY",
       narrative: "GENERAL GRAARDOR DEFEATED",
@@ -727,7 +727,7 @@ export const generalGraardorDefinition = {
   },
   controls: {
     defaultMechanicsConfig: {
-      [startModeKey]: startModeAltarDoor,
+      [startModeKey]: startModeStandardDoor,
       [spawnMinionsKey]: true,
     },
     mechanicsToggles: [
@@ -738,15 +738,15 @@ export const generalGraardorDefinition = {
         setup: true,
         choices: [
           {
+            value: startModeStandardDoor,
+            label: "Standard",
+          },
+          {
             value: startModeAltarDoor,
             label: "Altar-Door (6:0)",
           },
-          {
-            value: startModeStandardDoor,
-            label: "Standard (Door Entry)",
-          },
         ],
-        info: "Altar-Door (6:0) starts on the north altar tile with General Graardor aligned on the 6:0 lane. Standard (Door Entry) starts at the west Big door with General Graardor at his default spawn.",
+        info: "Standard starts at the west Big door with General Graardor at his default spawn. Altar-Door (6:0) starts on the north altar tile with General Graardor already aligned on the 6:0 lane for practicing the cycle.",
       },
       { key: spawnMinionsKey, label: "Spawn bodyguard minions", setup: true },
     ],

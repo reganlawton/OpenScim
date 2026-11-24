@@ -1,10 +1,10 @@
 // General Graardor (client/encounters/general-graardor/). Supports two starting
 // modes via graardorStartMode:
-// - "altar_door" (default): player at 54,57 ("Shoot->door" in front of the
+// - "altar_door": player at 54,57 ("Shoot->door" in front of the
 //   Bandos altar), General Graardor at 52,50 (4x4, 255 hitpoints) on the 6:0
 //   lane, Sergeant Strongstack (50,46), Sergeant Steelwill (56,40) and Sergeant
 //   Grimspike (50,50).
-// - "standard_door": player at 48,42 (inside the west Big door), General
+// - "standard_door" (default): player at 48,42 (inside the west Big door), General
 //   Graardor at his default spawn 56,47, and Sergeant Grimspike at 52,50.
 import { attack, command, equip, item, offensive, protect, special } from "./common.mjs";
 
@@ -98,7 +98,7 @@ export const scenarios = [
     kind: KIND,
     seed: 7,
     ticks: 260,
-    mechanics: { infiniteHealth: true },
+    mechanics: { graardorStartMode: "altar_door", infiniteHealth: true },
     ...crystalBowfaGear,
     inventory: [item.toxicBlowpipe, item.superRestore, item.superRestore],
     script(tick, api) {
@@ -159,7 +159,7 @@ export const scenarios = [
     kind: KIND,
     seed: 13,
     ticks: 100,
-    mechanics: { infiniteHealth: true },
+    mechanics: { graardorStartMode: "altar_door", infiniteHealth: true },
     ...crystalBowfaGear,
     inventory: [item.toxicBlowpipe],
     script(tick, api) {

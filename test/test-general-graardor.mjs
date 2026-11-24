@@ -3,7 +3,7 @@
 // default gear setup (Ring of suffering (i) worn, Toxic blowpipe in inventory),
 // the Altar-Door (6:0) tile marker preset active by default, clickable red-X
 // 3D ray intersections on both the Big door and the Bandos altar, support for
-// both Altar-Door (6:0) and Standard (Door Entry) starting positions, bodyguard
+// both Altar-Door (6:0) and Standard starting positions, bodyguard
 // minions attacking immediately from tick 1, and victory upon General Graardor's
 // death without needing to finish off the minions.
 import assert from "node:assert/strict";
@@ -89,8 +89,10 @@ try {
 
   // Verify default Crystal (Bowfa) setup with Ring of suffering (i) and Toxic blowpipe,
   // normalized terrain elevation near z = 0 so 3D object picking works for the Bandos
-  // altar and Big door, and both Altar-Door (6:0) and Standard (Door Entry) start modes.
+  // altar and Big door, and both Altar-Door (6:0) and Standard start modes.
   const initialCheck = await page.evaluate(() => {
+    const defaultPlayerStart = [...engine.player().position];
+    const defaultStartMode = engine.mechanicsConfig.graardorStartMode;
     const player = engine.player();
     const equipment = { ...player.equipment };
     const inventoryIds = player.inventory.filter(Boolean).map((entry) => entry.id);
@@ -110,18 +112,20 @@ try {
     const altarGroundZ = terrainHeights ? -terrainHeights[54][58] / 128 : null;
     const doorGroundZ = terrainHeights ? -terrainHeights[47][42] / 128 : null;
 
-    // Test Standard (Door Entry) mode via mechanicsConfig
+    // Test Standard mode via mechanicsConfig
     engine.reset(undefined, undefined, { graardorStartMode: "standard_door" });
     const standardPlayerStart = [...engine.player().position];
     const standardGraardorStart = [...engine.worldState.actors.get("general_graardor").position];
     const standardGrimspikeStart = [...engine.worldState.actors.get("sergeant_grimspike").position];
 
-    // Restore default Altar-Door mode and equipment
+    // Select Altar-Door mode for the red-X cycle checks
     engine.reset(undefined, undefined, { graardorStartMode: "altar_door" });
     engine.setEquipment(equipment);
     const playerStart = [...engine.player().position];
 
     return {
+      defaultPlayerStart,
+      defaultStartMode,
       equipment,
       hasBlowpipeInInventory: inventoryIds.includes(12926),
       blowpipeDartId,
@@ -136,6 +140,8 @@ try {
     };
   });
 
+  assert.equal(initialCheck.defaultStartMode, "standard_door", "Standard is the default start mode");
+  assert.deepEqual(initialCheck.defaultPlayerStart, [48, 42], "Default start is inside the west Big door");
   assert.equal(initialCheck.equipment.head, 23971, "Crystal helm equipped by default");
   assert.equal(initialCheck.equipment.body, 23975, "Crystal body equipped by default");
   assert.equal(initialCheck.equipment.legs, 23979, "Crystal legs equipped by default");
@@ -169,7 +175,7 @@ try {
   // and toward the Bandos altar (54, 59), minions attacking immediately, and victory
   // triggering as soon as General Graardor dies while the three minions are still alive.
   const fightResult = await page.evaluate(() => {
-    engine.reset();
+    engine.reset(undefined, undefined, { graardorStartMode: "altar_door" });
     const graardor = engine.worldState.actors.get("general_graardor");
     const strongstack = engine.worldState.actors.get("sergeant_strongstack");
     const steelwill = engine.worldState.actors.get("sergeant_steelwill");
