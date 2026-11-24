@@ -20448,6 +20448,7 @@ var Mz = class {
     if (!a) {
       return null;
     }
+    const bounds = getArenaBounds() ?? { minX: 0, maxX: 63, minY: 0, maxY: 63 };
     if (!this.terrainHeights) {
       if (a.direction.z >= 0) {
         return null;
@@ -20460,7 +20461,7 @@ var Mz = class {
       const n = a.origin.y + a.direction.y * e;
       const s = Math.floor(t);
       const r = Math.floor(n);
-      if (s < 0 || s > 63 || r < 0 || r > 63) {
+      if (s < bounds.minX || s > bounds.maxX || r < bounds.minY || r > bounds.maxY) {
         return null;
       } else {
         return {
@@ -20477,10 +20478,10 @@ var Mz = class {
       const i = Math.floor(n);
       const l = Math.floor(s);
       if (
-        !(i < 0) &&
-        !(i > 63) &&
-        !(l < 0) &&
-        !(l > 63) &&
+        !(i < bounds.minX) &&
+        !(i > bounds.maxX) &&
+        !(l < bounds.minY) &&
+        !(l > bounds.maxY) &&
         r <= -this.FS(i, l) / 128
       ) {
         return {
@@ -41286,6 +41287,10 @@ var NpcInstanceManager = class {
           : r.previousPosition[0] !== r.position[0] ||
               r.previousPosition[1] !== r.position[1],
       );
+      const existing = this.instanceRegistry.get(r.id);
+      if (existing && existing.npcTypeId !== r.npcTypeId) {
+        this.removeInstance(r.id);
+      }
       const o = this.instanceRegistry.get(r.id);
       const d = o ?? this.hA(r, e);
       if (!o) {
@@ -47853,10 +47858,11 @@ var SceneCompositor = class e {
   }
   AH(e, a, t) {
     const n = this.mH();
-    let s = Math.max(0, (n?.minX ?? 0) - 3);
-    let r = Math.min(63, (n?.maxX ?? 63) + 3);
-    let i = Math.max(0, (n?.minY ?? 0) - 3);
-    let l = Math.min(63, (n?.maxY ?? 63) + 3);
+    const k = this.KH();
+    let s = Math.max(k.minX, (n?.minX ?? k.minX) - 3);
+    let r = Math.min(k.maxX, (n?.maxX ?? k.maxX) + 3);
+    let i = Math.max(k.minY, (n?.minY ?? k.minY) - 3);
+    let l = Math.min(k.maxY, (n?.maxY ?? k.maxY) + 3);
     if (t) {
       const e = 2;
       for (let n = s; n <= r; n++) {

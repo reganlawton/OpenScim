@@ -409,7 +409,7 @@ export function difference(name, recorded, actual) {
 }
 
 /** The scenario files, or the one named (so that a file being edited cannot break the others). */
-export const scenarioFiles = ["engine", "shared", "yama", "inferno", "sol-heredit", "zebak", "fixture", "colosseum", "vardorvis", "doom-of-mokhaiotl"];
+export const scenarioFiles = ["engine", "shared", "yama", "inferno", "sol-heredit", "zebak", "fixture", "colosseum", "vardorvis", "doom-of-mokhaiotl", "zulrah"];
 export async function loadScenarios(file) {
   const lists = await Promise.all((file ? [file] : scenarioFiles).map((name) => import(`./scenarios/${name}.mjs`)));
   const scenarios = lists.flatMap((module) => module.scenarios);

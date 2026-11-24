@@ -3,6 +3,7 @@ import { nexusPresentation } from "/toa/nexus.js";
 import { colosseumPresentation } from "./colosseum/presentation.js";
 import { vardorvisPresentation } from "./vardorvis/presentation.js";
 import { doomPresentation, doomDeepPresentation } from "./doom-of-mokhaiotl/presentation.js";
+import { zulrahPresentation } from "./zulrah/presentation.js";
 // What draws an encounter: the presentations that are written in modules.
 // The chunk rendering.js holds the scene classes, so a presentation cannot
 // import its base scene. It is a function instead: rendering.js calls every
@@ -38,6 +39,6 @@ import { doomPresentation, doomDeepPresentation } from "./doom-of-mokhaiotl/pres
 //                    setupContext, heroArt, thumb, wikiUrl, portrait
 // To add one, write the function beside the encounter and add it to the
 // list. Nothing in client/assets/ has to change.
-export const presentationBuilders = [zebakPresentation, nexusPresentation, colosseumPresentation, vardorvisPresentation, doomPresentation];
+export const presentationBuilders = [zebakPresentation, nexusPresentation, colosseumPresentation, vardorvisPresentation, doomPresentation, zulrahPresentation];
 // After the Doom's own: his deeper room's kind takes this one (rendering.js keeps the last per kind).
 presentationBuilders.push(doomDeepPresentation);

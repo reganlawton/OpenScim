@@ -5604,6 +5604,35 @@ var _le = {
   toa_nexus: {
     naked: Ple,
   },
+  zulrah: {
+    bowfa: {
+      name: "Crystal + Bowfa",
+      equipment: {
+        head: 23971, // Crystal helm
+        cape: 22109, // Ava's assembler
+        amulet: 19547, // Necklace of anguish
+        weapon: 25865, // Bow of faerdhinen
+        body: 23975, // Crystal body
+        legs: 23979, // Crystal legs
+        hands: 7462, // Barrows gloves
+        boots: 22954, // Devout boots
+        ring: 20657, // Ring of suffering (ri)
+      },
+      inventory: gT([
+        2444, 5952, 2434, 2434, // Ranging pot(4), Antidote++(4), Prayer pots(4)
+        2434, 2434, 13441, 3144, // Prayer pots(4), Anglerfish, Karambwan
+        13441, 13441, 3144, 3144,
+        13441, 13441, 3144, 3144,
+        13441, 13441, 3144, 3144,
+        13441, 13441, 3144, 3144,
+        13441, 13441, 3144, 3144,
+      ].map((id) => ({ id }))),
+      supplies: {
+        equippedAmmo: { id: 22947 }, // Rada's blessing 4
+        spellbook: "standard",
+      },
+    },
+  },
   // The best-in-slot set of the wiki's strategy guide (Doom of
   // Mokhaiotl/Strategies): twisted bow in fortified Masori, the Zaryte
   // crossbow for specials, a switch for each larva (Scorching bow, Darklight,

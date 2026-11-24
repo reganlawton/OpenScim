@@ -1,5 +1,6 @@
 var encounterDefinitions = [
   {kind:"zebak",variantKinds:[],slug:"zebak",registered:true},
+  {kind:"zulrah",variantKinds:[],slug:"zulrah",registered:true},
   {kind:"toa_nexus",variantKinds:[],slug:"toa",registered:true},
   {kind:"doom_of_mokhaiotl",variantKinds:["doom_of_mokhaiotl_deep"],slug:"doom-of-mokhaiotl",registered:true},
   // Desert Treasure II (client/dt2/bosses.js). Vardorvis is registered

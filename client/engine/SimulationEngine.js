@@ -53,7 +53,7 @@ import { resolvePendingRetaliations } from "./npcRetaliation.js";
 import { applyMonsterStatOverride } from "./monsterStats.js";
 import { isTileInsideFootprint, getDistanceToFootprint, areFootprintsOverlapping, isTileInAttackRange } from "./attackRange.js";
 import { createRandomDecisions } from "./decisions.js";
-import { setArenaConfig, isInsideArenaBounds, getRegisteredArenaConfig } from "./arena.js";
+import { setArenaConfig, getArenaBounds, isInsideArenaBounds, getRegisteredArenaConfig } from "./arena.js";
 import {
   recordNpcStepTick,
   isActorInWorld,
@@ -205,9 +205,8 @@ function isTileInsideMapSquare(tile) {
 }
 function isStepDestinationInsideArena(destination) {
   const [x, y] = destination;
-  return (
-    isTileInsideMapSquare(destination) && isInsideArenaBounds(x, y)
-  );
+  // Multi-map-square arenas (e.g. Zulrah) have bounds extending beyond 0..63.
+  return getArenaBounds() ? isInsideArenaBounds(x, y) : isTileInsideMapSquare(destination);
 }
 // Prayer drain. Every tick each active prayer adds its number from
 // prayerDrainEffects to prayerState.drainCounter, except a prayer that was
@@ -2480,6 +2479,44 @@ var SimulationEngine = class {
       this.tryTriggerRedemption(hit.tick);
       if ("number" == typeof hit.applyPoison) {
         this.applyPoisonToPlayer(hit.applyPoison);
+      }
+      if (hit.effectiveDamage > 0 && hit.sourceId && hit.sourceId !== PLAYER_ACTOR_ID) {
+        const ringId = player.equipment?.ring;
+        if (
+          ringId === 2550 ||
+          ringId === 20655 ||
+          ringId === 20657 ||
+          ringId === 25248 ||
+          ringId === 26762
+        ) {
+          const attackerNpc = this.worldState.getNpc(hit.sourceId);
+          if (attackerNpc && attackerNpc.alive && attackerNpc.vitals.hp > 0) {
+            // WIKI: Ring of recoil / Ring of suffering (r/ri) reflects floor(damage * 0.1) + 1.
+            const recoilDamage = Math.floor(hit.effectiveDamage * 0.1) + 1;
+            const recoilHit = this.combatSystem.applyDamage(
+              player,
+              attackerNpc,
+              recoilDamage,
+              "typeless",
+              hit.tick,
+              { infiniteHealth: this.mechanicsConfig.infiniteHealth },
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              "hit-queue",
+            );
+            this.tickEvents.emit({
+              type: "hitsplat_spawned",
+              targetId: attackerNpc.id,
+              amount: recoilHit.effectiveDamage,
+              hitsplatType: "damage",
+            });
+            this.handleDamageApplied(recoilHit);
+          }
+        }
       }
       this.notifyPlayerDamageTaken({
         sourceKind: "combat",

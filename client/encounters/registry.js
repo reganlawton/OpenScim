@@ -31,6 +31,7 @@ import { getMonsterFormulaStats } from "../engine/monsterStats.js";
 import { solBoundaryLocs } from "./sol-heredit/boundaryLocs.js";
 import { colosseumDefinition } from "./colosseum/ColosseumEncounter.js";
 import { vardorvisDefinition } from "./vardorvis/encounter.js";
+import { zulrahDefinition } from "./zulrah/encounter.js";
 // The encounters the client can run, and the registry the engine asks for
 // the encounter of a kind (engine/createSimulationEngine.js calls
 // encounterRegistry.create). This module imports no chunk.
@@ -224,6 +225,7 @@ var registeredEncounterDefinitions = [
     },
     countdownMovement: (mechanics) => getInfernoSetup(mechanics).startWave !== 69,
   },
+  zulrahDefinition,
 ];
 function getDefinitionKinds(definition) {
   return [definition.kind, ...Object.keys(definition.variantFactories ?? {})];

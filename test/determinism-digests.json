@@ -2063,6 +2063,40 @@
     "final": "ef56f7b6cf7b3991",
     "endsLikeLiveRun": true
    }
+  },
+  "zulrah/rotation-1": {
+   "ticks": 97,
+   "outcome": "dead",
+   "final": "028f22d67e91363e1702e67bbaf709965dea94c294d86fe46e513dfe86788d73",
+   "perTick": "268fa8ba2d 967e7d4ff2 636278af8b 80646a92cc 80ee4f672c 0998265861 a03de49956 75297d3ee4 07b5a83629 78b71e2f2d f07808d6e5 c81951670b b47ed9c1ec 1fcf7fdd01 b7f6c73926 31f17ff28d 8d0cd7b0ab 5ea506cbc5 feaeadb479 d855faa786 29664351f0 6ac2c7ab6a 0a7a0a2150 1670d1edb0 22b0237c34 b3b77af686 17116b19ba babad14b83 da1b79af5f 3bb1a258c8 9dfa2dbfc6 db49fdcbcc 34b2fd0dae bee0d998dd 7548d1347c f65d4a4f38 7c17828093 e89d3ff39d be42dca882 3585bfe45a 039b537d7f 329400af73 f3237041ca 14fa094a22 24ae05061f 13495b6b7e f6aae55f0b 3424941372 6a98c0c2d2 dac1ea4836 92b21e342e 0e85023c39 01730d4ff1 eff6bbff91 0f99762ca2 107e0fac47 af58966776 829c2477de 10e4c7f673 c007e3a08a 2606079d42 f74a91bb0e 142d10e041 f15bba46dd 7cb1ac248f 17cf3c81c9 ded0dd1cfd 4d1557f66c abf4a112a9 bf5d0f249d 36d158dd55 cb31e0659f b9e58fa8f4 6b0c709fa2 2d42b1045d 0e57247c10 8325765dcd 14a745c4dc dcc11e119c b63cc51193 aa1710eb5d d77e129bbe b95f640a3b 451134e04e 9a1d832945 5d5a4ca528 d5bad3bfd4 3d5063c72f 22371c14de bc86bf1e3b a263a2f1a7 813bfe16ca 95accd3734 742a38570b bd7b57685c 724e68aa72 0a4c5fd35a e2280605c2",
+   "unseededRandomCalls": {
+    "setup": 1,
+    "ticks": 0,
+    "rebuild": 1
+   },
+   "replayRebuild": {
+    "frame": 48,
+    "digest": "5a42e7b82d3ff317",
+    "final": "c8ffa2a6defc842e",
+    "endsLikeLiveRun": true
+   }
+  },
+  "zulrah/jad-practice": {
+   "ticks": 20,
+   "outcome": "dead",
+   "final": "d0adebdf6c9d7a599f17460e8dd5188a29f4e5a4319a6ee69e0ae1adebddcf4c",
+   "perTick": "04cde93965 9983a3d207 bacd014fe4 555e228f7a 95fd6300d1 10742e0b83 292e0d062b 4d5bde3d0d d52b024011 f88899fd23 d87dcce4f3 c62583e4f6 dbc3a64dcf 8838f857f9 9b3acb9e7e ae383c6959 4562941cbe 4e1107421c bce5727c54 e3e1383ff4 683e534e19",
+   "unseededRandomCalls": {
+    "setup": 1,
+    "ticks": 0,
+    "rebuild": 1
+   },
+   "replayRebuild": {
+    "frame": 10,
+    "digest": "734e495a9eb6eab3",
+    "final": "2c1097711b98a20f",
+    "endsLikeLiveRun": false
+   }
   }
  }
 }
