@@ -5475,6 +5475,11 @@ input[type="number"] {
   min-width: 0;
   max-width: 280px;
 }
+.encounter-panel-card .rail-section .mechanics-toggles > .setting-row,
+.encounter-panel-card .rail-section .mechanics-toggles > .mechanics-color-group-title {
+  flex: 0 0 100%;
+  max-width: none;
+}
 .encounter-panel-card
   .rail-section
   .mechanics-toggles

@@ -54,7 +54,7 @@ const armourTier = player => {
 };
 const rollBetween = (random, [min, max]) => min + Math.floor(random() * (max - min + 1));
 export const startPhaseKey = "corruptedHunllefStartPhase";
-export const prayerTileMarkersKey = "corruptedHunllefPrayerTileMarkers";
+export const prayerTileMarkersKey = "corruptedHunllefPrayerTileOutline";
 export const tornadoTileMarkerColorKey = "corruptedHunllefTornadoTileMarkerColor";
 export const prayerTileMarkerColorKeys = { range: "corruptedHunllefRangeTileColor", magic: "corruptedHunllefMagicTileColor", melee: "corruptedHunllefMeleeTileColor" };
 const hpAtPhase = (maxHp, phase) => phase === 1 ? Math.floor(maxHp * 2 / 3)
@@ -321,7 +321,6 @@ export class CorruptedHunllefEncounter {
   }
   getOutcome() { return this.outcome; }
   getSnapshot({ world } = {}) { const boss = world?.getNpc(bossId); return { kind, state: { bossAttacksPending: false,
-    bossPosition: boss ? [...boss.position] : [...bossStart],
     phase: boss ? floorPhase(boss.vitals.hp, boss.vitals.maxHp) : this.startPhase, protection: this.protection,
     attackStyle: this.attackStyle, countedAttacks: this.countedAttacks, nextAttackTick: this.nextAttackTick,
     nextTornadoTick: this.nextTornadoTick, pendingTornadoSummonTick: this.pendingTornadoSummonTick,
@@ -344,11 +343,12 @@ export const corruptedHunllefDefinition = { kind, factory: () => new CorruptedHu
   mechanicsToggles: [
     { key: startPhaseKey, label: "Starting boss health", setup: true,
       choices: startPhases.map(({ value, label }) => ({ value, label })) },
-    { key: prayerTileMarkersKey, label: "Tile markers by protection prayer", setup: true, info: "Color Hunllef's tiles according to the prayer protecting it." },
-    { key: prayerTileMarkerColorKeys.range, label: "Ranged protection tile color", type: "color", setup: true, dependsOn: prayerTileMarkersKey },
-    { key: prayerTileMarkerColorKeys.magic, label: "Magic protection tile color", type: "color", setup: true, dependsOn: prayerTileMarkersKey },
-    { key: prayerTileMarkerColorKeys.melee, label: "Melee protection tile color", type: "color", setup: true, dependsOn: prayerTileMarkersKey },
-    { key: tornadoTileMarkerColorKey, label: "Tornado tile color", type: "color", setup: true },
+    { key: prayerTileMarkersKey, label: "Outline tile by protection prayer", section: "Tile indicators", setup: true,
+      info: "Draw a colored outline around Hunllef's true tile footprint according to its protection prayer." },
+    { key: prayerTileMarkerColorKeys.magic, label: "Mage", type: "color", groupLabel: "Protect from", section: "Tile indicators", setup: true, dependsOn: prayerTileMarkersKey },
+    { key: prayerTileMarkerColorKeys.melee, label: "Melee", type: "color", section: "Tile indicators", setup: true, dependsOn: prayerTileMarkersKey },
+    { key: prayerTileMarkerColorKeys.range, label: "Range", type: "color", section: "Tile indicators", setup: true, dependsOn: prayerTileMarkersKey },
+    { key: tornadoTileMarkerColorKey, label: "Tornado tile color", type: "color", section: "Tile indicators", setup: true },
   ],
   bossHpPresets: startPhases.map(({ label, phase }) => ({ label,
     hp: hpAtPhase(maxBossHp, phase), hint: phase === 0 ? "First floor pattern pool."

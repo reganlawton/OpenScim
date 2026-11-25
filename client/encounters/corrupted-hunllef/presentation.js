@@ -21,19 +21,27 @@ export function withFinalPhaseSafeMarkers(input) {
   const protectionColorKey = prayerTileMarkerColorKeys[encounterState?.protection];
   const protectionColor = protectionColorKey && (mechanicsConfig[protectionColorKey] ??
     ({ range: "#00ff00", magic: "#0000ff", melee: "#ff0000" })[encounterState.protection]);
-  const [bossX, bossY] = encounterState?.bossPosition ?? bossStart;
-  const protectionMarkers = mechanicsConfig[prayerTileMarkersKey] && protectionColor
-    ? Array.from({ length: 25 }, (_, index) => ({ x: bossX + index % 5, y: bossY + Math.floor(index / 5),
-      color: protectionColor, opacity: 0.65, label: "Protect " + encounterState.protection }))
+  const [bossX, bossY] = input.simulationState?.npcs?.find(({ id }) => id === bossId)?.position ?? bossStart;
+  const protectionLineMarkers = mechanicsConfig[prayerTileMarkersKey] && protectionColor
+    ? [
+      ...Array.from({ length: 5 }, (_, offset) => ({ x: bossX + offset, y: bossY, orientation: "horizontal" })),
+      ...Array.from({ length: 5 }, (_, offset) => ({ x: bossX + offset, y: bossY + 5, orientation: "horizontal" })),
+      ...Array.from({ length: 5 }, (_, offset) => ({ x: bossX, y: bossY + offset, orientation: "vertical" })),
+      ...Array.from({ length: 5 }, (_, offset) => ({ x: bossX + 5, y: bossY + offset, orientation: "vertical" })),
+    ].map(marker => ({ ...marker, color: protectionColor, opacity: 1 }))
     : [];
-  if (encounterState?.phase !== 2 && tornadoMarkers.length === 0 && protectionMarkers.length === 0) return input;
+  if (encounterState?.phase !== 2 && tornadoMarkers.length === 0 && protectionLineMarkers.length === 0) return input;
   const options = input.options ?? {};
-  return { ...input, options: { ...options, showTileMarkers: true },
+  return { ...input, options: { ...options, showTileMarkers: true,
+      ...(protectionLineMarkers.length > 0 ? { showLineMarkers: true } : {}) },
     tileMarkers: [
       ...(options.showTileMarkers ? (input.tileMarkers ?? []) : []),
       ...tornadoMarkers,
-      ...protectionMarkers,
       ...(encounterState?.phase === 2 ? finalPhaseSafeTiles.map(([x, y]) => ({ x, y, color: "#39d8b8", opacity: 0.65, label: "Safe" })) : []),
+    ],
+    lineMarkers: [
+      ...(options.showLineMarkers ? (input.lineMarkers ?? []) : []),
+      ...protectionLineMarkers,
     ] };
 }
 

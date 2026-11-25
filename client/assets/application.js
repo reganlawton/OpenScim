@@ -16810,11 +16810,15 @@ var gpe = ({
   );
   const hZ = fa(encounterKind);
   const i0 = (0, React.useMemo)(
-    () =>
-      hZ
-        ? mechanicsToggles.filter((ij) => !hZ.keys.includes(ij.key))
-        : mechanicsToggles,
-    [mechanicsToggles, hZ],
+    () => {
+      const visibleToggles = mechanicsToggles.filter((toggle) =>
+        !(toggle.type === "color" && toggle.dependsOn && mechanicsConfig[toggle.dependsOn] !== true),
+      );
+      return hZ
+        ? visibleToggles.filter((ij) => !hZ.keys.includes(ij.key))
+        : visibleToggles;
+    },
+    [mechanicsToggles, hZ, mechanicsConfig],
   );
   const { unsectioned: unsectioned, sections: sections } = (0, React.useMemo)(
     () => e2(i0),

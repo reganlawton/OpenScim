@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadEnvironment } from "../tools/determinism/harness.mjs";
 await loadEnvironment(); // the client uses web-root imports resolved by the harness loader
-const [{ setArenaConfig }, { CorruptedHunllefEncounter, corruptedHunllefDefinition, startPhaseKey }, { floorPatterns }, { corruptedHunllefPresentation, finalPhaseSafeTiles, withFinalPhaseSafeMarkers }] = await Promise.all([
+const [{ setArenaConfig }, { CorruptedHunllefEncounter, corruptedHunllefDefinition, startPhaseKey,
+  prayerTileMarkersKey, prayerTileMarkerColorKeys, tornadoTileMarkerColorKey }, { floorPatterns },
+  { corruptedHunllefPresentation, finalPhaseSafeTiles, withFinalPhaseSafeMarkers }] = await Promise.all([
   import("../client/engine/arena.js"),
   import("../client/encounters/corrupted-hunllef/encounter.js"),
   import("../client/encounters/corrupted-hunllef/floorPatterns.js"),
@@ -127,4 +129,41 @@ test("final phase marks the eight centered tiles safe in every current hard patt
   assert.deepEqual(marked.tileMarkers.map(({ x, y }) => [x, y]), finalPhaseSafeTiles);
   const earlierPhase = { ...input, simulationState: { encounter: { state: { phase: 1 } } } };
   assert.equal(withFinalPhaseSafeMarkers(earlierPhase), earlierPhase);
+});
+
+test("tornado tile markers use the spawned tile and configurable white default", () => {
+  const state = { phase: 1, tornadoes: [{ id: "tornado-1", position: [53, 55] }] };
+  const input = { simulationState: { encounter: { state }, mechanicsConfig: {} }, options: { showTileMarkers: false } };
+  const marked = withFinalPhaseSafeMarkers(input);
+  assert.equal(marked.options.showTileMarkers, true);
+  assert.deepEqual(marked.tileMarkers.map(({ x, y, color }) => [x, y, color]), [[53, 55, "#ffffff"]]);
+
+  const recolored = withFinalPhaseSafeMarkers({ ...input,
+    simulationState: { ...input.simulationState, mechanicsConfig: { [tornadoTileMarkerColorKey]: "#fedcba" } },
+  });
+  assert.deepEqual(recolored.tileMarkers.map(({ x, y, color }) => [x, y, color]), [[53, 55, "#fedcba"]]);
+});
+
+test("protection prayer markers outline the boss footprint and expose colors under Protect from", () => {
+  const state = { phase: 1, protection: "magic", tornadoes: [] };
+  const input = { simulationState: { encounter: { state }, npcs: [{ id: "corrupted-hunllef", position: [51, 52] }], mechanicsConfig: {
+    [prayerTileMarkersKey]: true, [prayerTileMarkerColorKeys.magic]: "#123456",
+  } }, options: { showLineMarkers: false } };
+  const marked = withFinalPhaseSafeMarkers(input);
+  assert.equal(marked.options.showLineMarkers, true);
+  assert.equal(marked.lineMarkers.length, 20);
+  assert.equal(marked.lineMarkers.every(({ color, opacity }) => color === "#123456" && opacity === 1), true);
+  assert.equal(marked.lineMarkers.some(({ x, y }) => x > 51 && x < 56 && y > 52 && y < 57), false,
+    "the outline does not fill the boss footprint");
+  assert.equal(marked.tileMarkers.length, 0);
+
+  const controls = corruptedHunllefDefinition.controls;
+  const outlineToggle = controls.mechanicsToggles.find(({ key }) => key === prayerTileMarkersKey);
+  assert.equal(outlineToggle.label, "Outline tile by protection prayer");
+  const protectFrom = controls.mechanicsToggles.filter(({ type, dependsOn }) => type === "color" && dependsOn === prayerTileMarkersKey);
+  assert.deepEqual(protectFrom.map(({ label }) => label), ["Mage", "Melee", "Range"]);
+  assert.equal(protectFrom[0].groupLabel, "Protect from");
+  assert.equal(controls.mechanicsToggles.find(({ key }) => key === startPhaseKey).section, undefined);
+  assert.deepEqual(controls.mechanicsToggles.filter(({ section }) => section === "Tile indicators")
+    .map(({ label }) => label), ["Outline tile by protection prayer", "Mage", "Melee", "Range", "Tornado tile color"]);
 });

@@ -2564,6 +2564,35 @@ button.info-hint:before {
   line-height: 1.2;
   display: flex;
 }
+.mechanics-color-group-title {
+  color: var(--color-secondary);
+  flex-basis: 100%;
+  font-family: "RuneScape Bold 12", sans-serif;
+  font-size: 14px;
+  line-height: 18px;
+  margin: 2px 0 0 6px;
+}
+.mechanics-color-setting {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-height: 32px;
+  width: 100%;
+  padding-left: 6px;
+}
+.mechanics-color-setting > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.mechanics-color-setting input[type="color"] {
+  box-sizing: border-box;
+  cursor: pointer;
+  flex: 0 0 42px;
+  height: 28px;
+  margin-left: 8px;
+  padding: 2px;
+  width: 42px;
+}
 .mechanics-choice-segmented {
   padding: calc(2px + var(--border-give, 0px));
   background: var(--color-surface-inset);
