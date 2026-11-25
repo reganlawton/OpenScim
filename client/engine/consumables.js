@@ -42,6 +42,11 @@ function createFourDosePotionEntries(doseItemIds, createEffects) {
   };
 }
 var extraPotionConsumables = {
+  ...createDosedConsumableEntries([23885, 23884, 23883, 23882], 229, "potion", 3, () => [ // CACHE: Egniol potion doses; WIKI: restores prayer and run energy, with stamina
+    { op: "restore_prayer_formula", formula: "prayer_potion" },
+    { op: "restore_run", amount: 4000 },
+    { op: "apply_timed_effect", effectType: "stamina", durationTicks: 200 },
+  ]),
   ...createFourDosePotionEntries([22461, 22464, 22467, 22470], () => [
     {
       op: "boost_formula",

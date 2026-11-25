@@ -54,6 +54,9 @@ const armourTier = player => {
 };
 const rollBetween = (random, [min, max]) => min + Math.floor(random() * (max - min + 1));
 export const startPhaseKey = "corruptedHunllefStartPhase";
+export const prayerTileMarkersKey = "corruptedHunllefPrayerTileMarkers";
+export const tornadoTileMarkerColorKey = "corruptedHunllefTornadoTileMarkerColor";
+export const prayerTileMarkerColorKeys = { range: "corruptedHunllefRangeTileColor", magic: "corruptedHunllefMagicTileColor", melee: "corruptedHunllefMeleeTileColor" };
 const hpAtPhase = (maxHp, phase) => phase === 1 ? Math.floor(maxHp * 2 / 3)
   : phase === 2 ? Math.floor(maxHp / 3) : maxHp; // inferred: first HP at or below each tsps phase threshold
 const maxBossHp = getMonsterHitpoints(npcTypeId); // TABLE
@@ -90,7 +93,9 @@ export class CorruptedHunllefEncounter {
     this.nextTornadoId = 0;
   }
   getSeeds() { return { encounterSeed: this.seed }; }
-  getDefaultMechanicsConfig() { return { infiniteHealth: true, [startPhaseKey]: "full" }; } // staging practice
+  getDefaultMechanicsConfig() { return { infiniteHealth: true, [startPhaseKey]: "full", [prayerTileMarkersKey]: false,
+    [tornadoTileMarkerColorKey]: "#ffffff", [prayerTileMarkerColorKeys.range]: "#00ff00",
+    [prayerTileMarkerColorKeys.magic]: "#0000ff", [prayerTileMarkerColorKeys.melee]: "#ff0000" }; } // staging practice
   configureRunStart(mechanics, context) {
     this.startPhase = startPhases.find(({ value }) => value === mechanics[startPhaseKey])?.phase ?? 0;
     const player = context?.world?.getPlayer();
@@ -316,6 +321,7 @@ export class CorruptedHunllefEncounter {
   }
   getOutcome() { return this.outcome; }
   getSnapshot({ world } = {}) { const boss = world?.getNpc(bossId); return { kind, state: { bossAttacksPending: false,
+    bossPosition: boss ? [...boss.position] : [...bossStart],
     phase: boss ? floorPhase(boss.vitals.hp, boss.vitals.maxHp) : this.startPhase, protection: this.protection,
     attackStyle: this.attackStyle, countedAttacks: this.countedAttacks, nextAttackTick: this.nextAttackTick,
     nextTornadoTick: this.nextTornadoTick, pendingTornadoSummonTick: this.pendingTornadoSummonTick,
@@ -332,9 +338,18 @@ export const corruptedHunllefDefinition = { kind, factory: () => new CorruptedHu
   mapSquare, playerStart, collision: { mode: "custom" }, loadsMapLocs: true, isWorkInProgress: true,
   loadouts: corruptedHunllefLoadouts,
   victory: { title: "VICTORY", narrative: "CORRUPTED HUNLLEF DEFEATED", accent: "blood" },
-}, controls: { defaultMechanicsConfig: { infiniteHealth: true, [startPhaseKey]: "full" },
-  mechanicsToggles: [{ key: startPhaseKey, label: "Starting boss health", setup: true,
-    choices: startPhases.map(({ value, label }) => ({ value, label })) }],
+}, controls: { defaultMechanicsConfig: { infiniteHealth: true, [startPhaseKey]: "full", [prayerTileMarkersKey]: false,
+    [tornadoTileMarkerColorKey]: "#ffffff", [prayerTileMarkerColorKeys.range]: "#00ff00",
+    [prayerTileMarkerColorKeys.magic]: "#0000ff", [prayerTileMarkerColorKeys.melee]: "#ff0000" },
+  mechanicsToggles: [
+    { key: startPhaseKey, label: "Starting boss health", setup: true,
+      choices: startPhases.map(({ value, label }) => ({ value, label })) },
+    { key: prayerTileMarkersKey, label: "Tile markers by protection prayer", setup: true, info: "Color Hunllef's tiles according to the prayer protecting it." },
+    { key: prayerTileMarkerColorKeys.range, label: "Ranged protection tile color", type: "color", setup: true, dependsOn: prayerTileMarkersKey },
+    { key: prayerTileMarkerColorKeys.magic, label: "Magic protection tile color", type: "color", setup: true, dependsOn: prayerTileMarkersKey },
+    { key: prayerTileMarkerColorKeys.melee, label: "Melee protection tile color", type: "color", setup: true, dependsOn: prayerTileMarkersKey },
+    { key: tornadoTileMarkerColorKey, label: "Tornado tile color", type: "color", setup: true },
+  ],
   bossHpPresets: startPhases.map(({ label, phase }) => ({ label,
     hp: hpAtPhase(maxBossHp, phase), hint: phase === 0 ? "First floor pattern pool."
       : `Starts floor pattern pool ${phase + 1} on the next pattern.` })),

@@ -12650,6 +12650,7 @@ var Uie = ({
     {
       key: fe,
       label: label,
+      type: type,
       choices: choices,
       dependsOn: dependsOn,
       info: info,
@@ -12670,6 +12671,29 @@ var Uie = ({
       dependsOn !== undefined &&
       f2.some((fw) => fw.key === dependsOn) &&
       true !== config[dependsOn];
+    if (type === "color") {
+      const color = typeof fq === "string" && /^#[0-9a-f]{6}$/i.test(fq) ? fq : (fr || "#ffffff");
+      return (0, wn.jsx)(Coe, {
+        searchId: null,
+        isModified: fs,
+        hideReset: null == defaultConfig,
+        onReset: () => onConfigChange({ ...config, [fe]: fr }),
+        className: fv ? "setting-row--dependent" : undefined,
+        children: (0, wn.jsxs)("label", {
+          className: "mechanics-color-setting",
+          children: [
+            (0, wn.jsx)("span", { children: label }),
+            (0, wn.jsx)("input", {
+              type: "color",
+              value: color,
+              disabled: fv,
+              "aria-label": label,
+              onChange: (event) => onConfigChange({ ...config, [fe]: event.target.value }),
+            }),
+          ],
+        }),
+      }, fe);
+    }
     if (choices && choices.length > 0) {
       return (0, wn.jsx)(
         k$e,
