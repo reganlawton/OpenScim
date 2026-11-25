@@ -1,6 +1,6 @@
 // The fixture encounter of test/fixtures/training-ground/: an encounter that
 // no file under client/ knows. The harness's module hooks register it in the
-// three lists a contributor adds a line to (test/fixtures/register.mjs), and
+// two lists a contributor adds a line to (test/fixtures/register.mjs), and
 // these fights reach it the way every fight is reached: by its kind, through
 // the encounter registry.
 //

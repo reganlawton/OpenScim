@@ -3,8 +3,8 @@
 // sound they name is in the trimmed cache's list. A sound that is not in it throws nothing: it
 // is silent (docs/ADDING-AN-ENCOUNTER.md, section 7).
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { colosseumAudio } from "../client/encounters/colosseum/audio.js";
+import { readCacheGroups } from "../tools/assets/cache-groups.mjs";
 
 const { hit_applied: hit, zuk_attack: attack } = colosseumAudio.rules;
 const pass = { kind: "pass" };
@@ -50,9 +50,9 @@ for (const accurate of [true, false])
 // The minotaur's heal has no rule: OBS, the game sends no sound with it.
 assert.deepEqual(attack.resolve({ type: "zuk_attack", attack: "colosseum_minotaur_heal", targetId: "colosseum_manticore_4", targetPosition: [39, 36], launchTick: 79, impactTick: 79 }), pass);
 
-const listed = new Set(JSON.parse(readFileSync(new URL("../tools/assets/cache-groups.json", import.meta.url), "utf8"))[4]);
+const listed = new Set(readCacheGroups()[4]);
 for (const [type, rule] of Object.entries(colosseumAudio.rules))
-  for (const id of rule.preloadIds) assert.ok(listed.has(id), `sound ${id} of the ${type} rule is not under "4" in tools/assets/cache-groups.json`);
+  for (const id of rule.preloadIds) assert.ok(listed.has(id), `sound ${id} of the ${type} rule is not under "4" in a list of tools/assets/cache-groups.mjs`);
 assert.deepEqual(new Set(Object.values(colosseumAudio.rules).flatMap((rule) => rule.preloadIds)), new Set([513, 600, 5774, 8339, 8348, 8353, 8356, 8352]));
 
 // The thralls' sounds (client/engine/thralls.js) are the player's in every fight (application.js), not the Colosseum's.

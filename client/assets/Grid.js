@@ -1,6 +1,7 @@
 import { toEsModule } from "./rolldown-runtime.js";
 import { parseDisplayMode } from "./deployment.js";
 import { attackRangesDefaults, readAttackRangesSettings, isAttackDragProtected } from "/plugins/attackRanges.js";
+import { projectileOverrideDefaults, readProjectileOverrideSettings } from "/plugins/projectileOverride.js";
 import {
   pako,
   requireJsxRuntime,
@@ -1405,6 +1406,22 @@ var ls = Object.fromEntries(
         "..........###.",
         "...........###",
         "............##",
+      ],
+    },
+    news: {
+      origin: [0, 2],
+      rows: [
+        ".###########.",
+        "##.........##",
+        "##.#######.##",
+        "##.........##",
+        "##.#######.##",
+        "##.........##",
+        "##.#####...##",
+        "##.........##",
+        "##.#######.##",
+        "##.........##",
+        ".###########.",
       ],
     },
     discord: {
@@ -13696,6 +13713,8 @@ var Yse = {
   uiScale: 1,
   stretchedModePluginEnabled: true,
   autoOverlayScaleEnabled: true,
+  sceneOverlaysFollowUiScale: true,
+  sceneOverlayScalePercent: 100,
   showTickCounter: true,
   showTickCounterOverhead: false,
   tickCounterAbovePrayerIcon: false,
@@ -13764,6 +13783,9 @@ var Yse = {
   interfaceStylesHdHealthBars: false,
   attackRangesEnabled: true,
   attackRanges: attackRangesDefaults,
+  // Every boss at Default: on, it draws nothing differently until one is chosen.
+  projectileOverrideEnabled: true,
+  projectileOverride: projectileOverrideDefaults,
   prayerEnabled: true,
   prayerFlickOrbEnabled: true,
   prayerFlickAlwaysOn: false,
@@ -14043,6 +14065,10 @@ var kRe = {
   uiScale: zUnknown().transform(dRe),
   stretchedModePluginEnabled: zBoolean().catch(Yse.stretchedModePluginEnabled),
   autoOverlayScaleEnabled: zBoolean().catch(Yse.autoOverlayScaleEnabled),
+  sceneOverlaysFollowUiScale: zBoolean().catch(Yse.sceneOverlaysFollowUiScale),
+  sceneOverlayScalePercent: zUnknown().transform((ez) =>
+    hRe(ez, 50, 400, Yse.sceneOverlayScalePercent),
+  ),
   showTickCounter: zBoolean().catch(Yse.showTickCounter),
   showTickCounterOverhead: zBoolean().catch(Yse.showTickCounterOverhead),
   tickCounterAbovePrayerIcon: zBoolean().catch(Yse.tickCounterAbovePrayerIcon),
@@ -14178,6 +14204,8 @@ var kRe = {
   ),
   attackRangesEnabled: zBoolean().catch(Yse.attackRangesEnabled),
   attackRanges: zUnknown().transform(readAttackRangesSettings),
+  projectileOverrideEnabled: zBoolean().catch(Yse.projectileOverrideEnabled),
+  projectileOverride: zUnknown().transform(readProjectileOverrideSettings),
   prayerEnabled: zBoolean().catch(Yse.prayerEnabled),
   prayerFlickOrbEnabled: zBoolean().catch(Yse.prayerFlickOrbEnabled),
   prayerFlickAlwaysOn: zBoolean().catch(Yse.prayerFlickAlwaysOn),
@@ -19778,7 +19806,8 @@ var TIe = [false, SIe];
 var NIe = {};
 var PIe = () => {};
 function $Ie(ez) {
-  return ez.canAdvanceTick() && !ez.isTutorialPaused();
+  // isPaused: an encounter may hold the clock (the sandbox, before its start and while paused).
+  return ez.canAdvanceTick() && !ez.isTutorialPaused() && ez.encounter?.isPaused?.() !== true;
 }
 function RIe(ez, eA) {
   return ez !== null && eA[ez] !== false;
@@ -20692,6 +20721,16 @@ function mse({
     [playerConfig, gM.displayState.playerEquipment, gM.replayMode],
   );
   const gO = aC(fj.getEncounterKind(), fo.mechanicsConfig);
+  // While the encounter holds the run (the sandbox before its Start), the
+  // start-of-fight countdown waits as it does under a modal, and counts once
+  // the hold ends; "sandbox-clock" says the hold changed.
+  const [, gOClock] = (0, pn.useState)(0);
+  (0, pn.useEffect)(() => {
+    const onClock = () => gOClock((count) => count + 1);
+    window.addEventListener("sandbox-clock", onClock);
+    return () => window.removeEventListener("sandbox-clock", onClock);
+  }, []);
+  const gOHeld = fj.encounter?.isPaused?.() === true;
   const gP = (function ({
     countdownTicks: countdownTicks,
     speedMultiplier: hF,
@@ -20840,7 +20879,7 @@ function mse({
   })({
     countdownTicks: autoAdvance ? fightStartCountdownTicks : null,
     speedMultiplier: speedMultiplier,
-    covered: modalPaused || fg || eE,
+    covered: modalPaused || fg || eE || gOHeld,
     introActive: fo.introActive,
     waitForIntro: gO,
     getIntroRemainingMs: (hE) => getIntroAnimationRemainingMs?.(hE),
@@ -42445,6 +42484,9 @@ var FHe = (ez) => {
           style: fX,
           "aria-hidden": "true",
           children: [
+            (0, wn.jsx)("span", {
+              className: "launcher-btn launcher-btn--icon",
+            }),
             communityLinks.map(({ name }) => (0, wn.jsx)("span", {
               className: "launcher-btn launcher-btn--icon",
             }, name)),
@@ -42461,6 +42503,15 @@ var FHe = (ez) => {
           "data-tucked": fJ,
           style: fY(fA.x, fA.y),
           children: [
+            (0, wn.jsx)(Jie, {
+              type: "button",
+              className: "launcher-btn launcher-btn--icon launcher-btn--link",
+              hint: "What's New",
+              "aria-label": "See what's new in OpenScim",
+              onMouseDown: (eC) => eC.preventDefault(),
+              onClick: plugins.onWhatsNew,
+              children: (0, wn.jsx)(zae, { glyph: "news" }),
+            }),
             (0, wn.jsx)(CommunityLinks, {
               className: "launcher-btn launcher-btn--icon launcher-btn--link",
             }),
@@ -53420,6 +53471,7 @@ var mn = (ez) => {
     overlayScale: h9 = 1,
     chromeScale: hb = h9,
     stretchedModePluginEnabled: hc = true,
+    sceneOverlayScale: sceneOverlayScale = null,
     overlayOuterScale: hd = 1,
     framePaintScale: hf = null,
     onGamePanelPositionChange: onGamePanelPositionChange,
@@ -55114,6 +55166,9 @@ var mn = (ez) => {
                               height: l5 ? l5.height : jI.height,
                               logicalHeight: l5 ? jY.height : undefined,
                               paintScale: hf,
+                              // Health bars, hitsplats and prayers follow the interface scale
+                              // unless Stretched Mode pins their own (sceneOverlayScale).
+                              overlayGameScale: sceneOverlayScale ?? (jO ? jP : k0),
                               onCameraChange: lO,
                               speedMultiplier: gl,
                               playerOverheadNumbers: n0,

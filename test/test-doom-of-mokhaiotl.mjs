@@ -49,7 +49,12 @@ try {
     return seen;
   });
   assert.ok(visuals > 0, "the boss attacked");
-  await page.waitForFunction(() => engine.getEncounterOutcome().phase === "victory" && document.body.innerText.includes("DOOM OF MOKHAIOTL DEFEATED"), null, { timeout: 120000 });
+  // A rock can push the player aside and off the boss: he is clicked again, as
+  // keepAttacking in tools/determinism/scenarios/doom-of-mokhaiotl.mjs does.
+  await page.waitForFunction(() => {
+    if (engine.getEncounterOutcome().phase === "active" && engine.player().attackTarget !== "doom") engine.injectAction({ type: "attackTarget", targetId: "doom" });
+    return engine.getEncounterOutcome().phase === "victory" && document.body.innerText.includes("DOOM OF MOKHAIOTL DEFEATED");
+  }, null, { timeout: 120000, polling: 600 });
 
   // Delves 2 to 8: their own room (map square 53,100) and its collision.
   await page.goto(origin + "/doom-of-mokhaiotl/delves-2-8/");

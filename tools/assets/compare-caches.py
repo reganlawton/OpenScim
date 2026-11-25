@@ -2,10 +2,11 @@
 
     python tools/assets/compare-caches.py A/disk.zip B/disk.zip
 
-Every group in cache-groups.json must exist in both and decode (none/bzip2/gzip)
+Every listed group (cache-groups.json and cache-groups/*.json, as
+cache-groups.mjs reads them) must exist in both and decode (none/bzip2/gzip)
 to the same payload. Exits 1 on any mismatch.
 """
-import bz2, collections, io, json, os, sys, zipfile, zlib
+import bz2, collections, glob, io, json, os, sys, zipfile, zlib
 
 NAMES = {0: "none", 1: "bzip2", 2: "gzip"}
 
@@ -50,7 +51,12 @@ def decode(stored):
 
 
 a, b = Cache(sys.argv[1]), Cache(sys.argv[2])
-groups = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache-groups.json")))
+here = os.path.dirname(os.path.abspath(__file__))
+listed = collections.defaultdict(set)
+for path in [os.path.join(here, "cache-groups.json")] + sorted(glob.glob(os.path.join(here, "cache-groups", "*.json"))):
+    for key, ids in json.load(open(path)).items():
+        listed[key].update(ids)
+groups = {key: sorted(ids) for key, ids in listed.items()}
 bad = 0
 for key, ids in groups.items():
     archive = int(key)

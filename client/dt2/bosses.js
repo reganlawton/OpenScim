@@ -1,7 +1,9 @@
-// The four bosses of Desert Treasure II, the Forgotten Four. Only Vardorvis
-// has a fight (client/encounters/vardorvis/): the engine knows every kind
-// (client/engine/encounterKinds.js), and the setup window shows a kind with
-// no registered encounter, the awakened ones among them, as "Coming Soon".
+// The four bosses of Desert Treasure II, the Forgotten Four. A boss has a
+// fight when the registry has a definition of his kind
+// (client/encounters/registry.js). The engine knows every kind either way
+// (client/engine/encounterKinds.js reads this list for those without one),
+// and the setup window shows a kind with no registered encounter, the
+// awakened ones among them, as "Coming Soon".
 //
 // `element` is the ancient element of the quartz the boss drops. `colour` is
 // its hue, saturation and lightness, each 0 to 255, as the renderer's colour

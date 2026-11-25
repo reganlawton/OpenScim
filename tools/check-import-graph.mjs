@@ -14,6 +14,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { posix } from "node:path";
 import { parse } from "@babel/parser";
+import { importGlobFiles } from "./determinism/import-glob.mjs";
 
 const root = (process.argv[2] ?? ".").replace(/\\/g, "/");
 const allowedChunkImports = new Set(); // none is allowed any more
@@ -27,9 +28,12 @@ const files = ["client/engine", "client/encounters", "client/data", "client/util
 const short = (file) => (root === "." ? file : file.slice(root.length + 1));
 const graph = new Map(), chunkImports = [];
 for (const file of files) {
-  const sources = parse(readFileSync(file, "utf8"), { sourceType: "module" }).program.body
+  const text = readFileSync(file, "utf8");
+  const sources = parse(text, { sourceType: "module" }).program.body
     .filter((statement) => (statement.type === "ImportDeclaration" || statement.type === "ExportNamedDeclaration" || statement.type === "ExportAllDeclaration") && statement.source)
-    .map((statement) => statement.source.value);
+    .map((statement) => statement.source.value)
+    // The registry finds the encounters with a glob import: the files it stands for are imports too.
+    .concat(importGlobFiles(text, posix.dirname(file)));
   const targets = sources.map((source) => (source.startsWith("/") ? posix.join(root, "client", source) : /^\.\.?\//.test(source) ? posix.join(posix.dirname(file), source) : null)).filter(Boolean);
   graph.set(file, targets.filter((target) => files.includes(target)));
   for (const target of targets) if (short(target).startsWith("client/assets/") && !target.endsWith("/vendor.js")) chunkImports.push(`${short(file)} -> ${short(target)}`);

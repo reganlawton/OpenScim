@@ -64,7 +64,9 @@ State on 2026-11-21. Sizes: S = hours, M = days, L = weeks.
 - [x] Nothing in the project requests beta.scim.gg any more.
 - [x] `npm run assets` (`tools/fetch-assets.mjs`): downloads OpenRS2 cache
       2762, builds the trimmed `client/osrs-cache/disk.zip` from the group
-      list in `tools/assets/cache-groups.json`, and fetches every media file
+      lists in `tools/assets/cache-groups.json` and
+      `tools/assets/cache-groups/` (one file per encounter added since), and
+      fetches every media file
       that has a proven source, checking each against
       `tools/assets/manifest.json` (SHA-256, or a hash of the pixels for
       images the fetcher encodes itself). 2057 of 2119 files are covered.
@@ -73,12 +75,22 @@ State on 2026-11-21. Sizes: S = hours, M = days, L = weeks.
       (`client/audio/soundEffects.js`, a port of the game client's
       synthesizer). The 392 `.ogg` files are gone. The trimmed cache carries
       399 effects, which adds 176 KB to `disk.zip`. An effect that is not
-      listed under `"4"` in `cache-groups.json` is silent: add its id and
+      listed under `"4"` in one of those lists is silent: add its id
+      (`node tools/cache-objects.mjs deps --add --to <name> sound:<id>`) and
       rebuild with `npm run assets -- --force`. All of index 4 would add
       about 20 MB.
 - [x] 144 interface images are decoded from cache sprites (index 8) by the
       fetcher. `tools/assets/match-sprites.mjs` finds such matches; only
       pixel-equal ones count.
+- [x] Stand-ins for the 62 below (`tools/assets/standins.mjs`, the
+      `standIn` recipe of each manifest entry): written where a file is
+      absent, marked with a PNG text chunk so the fetcher tells them from
+      originals. Hitsplats, overheads, staff icons and the click markers
+      are the cache sprites, the health bars RuneLite's default bars
+      (darkened behind), the soulreaper axe orb the item's icon; the
+      encounter pictures, mobile and reset buttons are empty pictures and
+      the site images a plain colour. The click markers are PNG (an
+      animated PNG for the cursor) under their `.webp` names.
 - [ ] 62 images have no source and exist only in working copies and backups:
       - 16 are cache sprites that were altered. Overhead prayers magic, melee
         and missiles are sprites 440/2, 440/0 and 440/1 with colours off by
@@ -104,9 +116,10 @@ State on 2026-11-21. Sizes: S = hours, M = days, L = weeks.
 
 - [x] `npm test` starts its own server (port 8791, production React).
 - [x] Tests for the engine without a browser: `tools/determinism/` runs
-      the engine in Node with the real cache, 88 scripted fights (engine,
-      Yama, Inferno, Sol Heredit, Zebak, and two of the fixture encounter
-      of `test/fixtures/`) and 23 scenarios that call code no
+      the engine in Node with the real cache, 114 scripted fights (engine,
+      Yama, Inferno, Sol Heredit, Zebak, the Colosseum, Vardorvis, the Doom
+      of Mokhaiotl, and two of the fixture encounter of `test/fixtures/`)
+      and 25 scenarios that call code no
       fight reaches (the shared rules' refusals and error paths, the menus'
       setup helpers, the player's rules and starting state, the replay
       limits, the lookups over the data tables, the prayer projection,
@@ -130,7 +143,11 @@ State on 2026-11-21. Sizes: S = hours, M = days, L = weeks.
       fight that way with 71 modules loaded.
 - [ ] A smoke test: home page and each encounter load with zero console
       errors (`browser-equivalence.mjs` in the Scim workspace does most of this).
-- [ ] GitHub Actions: install, build, test.
+- [x] GitHub Actions (`.github/workflows/ci.yml`): no game data is tracked,
+      install, import graph, test markers, build.
+- [ ] The determinism harness and `npm test` in GitHub Actions. Both need
+      the game assets, which must not reach GitHub (`ci.yml` says why), and
+      `npm test` a browser as well. Until then they are run locally.
 - [ ] Prettier is already a dependency; add a format check. ESLint later.
 
 ## Phase 5 — Backend (L)
@@ -440,8 +457,8 @@ Progress (2026-11-22):
       and 25 gaps, which the guide now fills. What it could not test
       without a browser is the scene; what a contributor still has to get
       from outside is the game's ids.
-- [ ] The waves of the Fortis Colosseum (`client/encounters/colosseum/`,
-      branch `colosseum-waves`): the first encounter added without a chunk.
+- [ ] The waves of the Fortis Colosseum (`client/encounters/colosseum/`):
+      the first encounter added without a chunk.
       Waves 1 to 11 with their six monsters, the reinforcements, Minimus and
       his offer of three modifiers in the game's own interface, all fourteen
       modifiers, and what two RuneLite plugins show. Waves 1 to 4 follow a
@@ -456,8 +473,8 @@ Progress (2026-11-22):
 
 ## Phase 7 — Community (S)
 
-- [ ] `README.md`: what it is, how to run, build, test.
-- [ ] `CONTRIBUTING.md`: setup, the asset rule, the readability rule.
+- [x] `README.md`: what it is, how to run, build, test.
+- [ ] `CONTRIBUTING.md`: the readability rule. Setup and the asset rule are in.
 - [x] Tidy `docs/`: the deobfuscation history and the Zebak notes are gone
       (Zebak is complete).
 - [ ] Issue templates for "bug" and "mechanic inaccuracy" (with a source link).
@@ -465,16 +482,31 @@ Progress (2026-11-22):
 
 ## Phase 8 — Content (L, ongoing)
 
-New fights, each added as modules through the three lists
+New fights, each added as modules through the two lists
 (`docs/ADDING-AN-ENCOUNTER.md`). Where the wiki and the game's cache leave
 timing open, record it from the game itself.
 
-- [ ] Desert Treasure II bosses: Vardorvis, Duke Sucellus, the Whisperer and
-      the Leviathan, each with its awakened version. Their kinds are already
-      in `client/engine/encounterKinds.js` (`registered: false`) and their
-      lobby entry is `client/dt2/`; the fights do not exist yet.
+- [ ] Desert Treasure II bosses, each with its awakened version. Vardorvis is
+      in (`client/encounters/vardorvis/`); his awakened version follows the
+      wiki, is inferred where the wiki is silent, and has not been recorded.
+      Duke Sucellus is in (`client/encounters/duke-sucellus/`), from the
+      wiki, RSPSApp's reading of rsprox recordings and three recordings of
+      the normal fight; his awakened version has not been recorded, and its
+      orb and bile are not in.
+      The Leviathan's post-quest fight is in (`client/encounters/leviathan/`),
+      from the wiki and RSPSApp's reading of rsprox recordings and videos;
+      its lightning damage, the smoke's 59 or 60, the stun's 25%, the width of
+      its weak spot and the rounding of its special's reduction wait for a
+      recording, and its awakened version is not written. The Whisperer
+      does not exist yet: its kind and its lobby entry are `client/dt2/`
+      (`bosses.js`; the engine's table of kinds has it with
+      `registered: false`).
 - [ ] Doom of Mokhaiotl
       (https://oldschool.runescape.wiki/w/Doom_of_Mokhaiotl/Strategies).
+      Delves 1 to 8 can be fought (`client/encounters/doom-of-mokhaiotl/`).
+      Open, as its `encounter.js` says: burrowing (delve 5 on), giant larvae
+      (delve 8), holy water, the shield's own hitpoint bar, the acid's venom,
+      sounds.
 - [ ] Nex (https://oldschool.runescape.wiki/w/Nex/Strategies).
 - [ ] Tumeken's Warden, Tombs of Amascut
       (https://oldschool.runescape.wiki/w/Tumeken%27s_Warden), next to Zebak

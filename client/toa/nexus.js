@@ -118,6 +118,7 @@ class NexusEncounter {
 
 export const nexusDefinition = {
   kind: nexusKind,
+  slug: "toa",
   factory: () => new NexusEncounter(),
   descriptor: {
     kind: nexusKind,

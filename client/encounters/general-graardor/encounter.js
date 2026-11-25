@@ -765,3 +765,7 @@ export const generalGraardorDefinition = {
     ],
   },
 };
+
+// Auto-discovery contract used by encounters/registry.js.
+export { generalGraardorDefinition as definition };
+export const order = 25; // Keep Graardor after the Doom in the encounter picker.

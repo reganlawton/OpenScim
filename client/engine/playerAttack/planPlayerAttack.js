@@ -100,14 +100,19 @@ function planPlayerAttack(attackInput, consumeGuaranteedMaximum, forceGuaranteed
       undefined !== encounterContext &&
       (attackInput.encounterRules?.consumePlayerGuaranteedMaxHit?.(encounterContext) ??
         false));
+  // The encounter's two rules are told the attack's style ("melee", "range",
+  // "magic") and its target: the Leviathan's depend on both.
+  const attack = { style, target: attackInput.target };
   return applyGuaranteedHitOverrides(scaledAttackPlan, {
     guaranteedAccuracy:
-      true === attackInput.target.formulaStats?.alwaysAccuratePlayerHit,
+      true === attackInput.target.formulaStats?.alwaysAccuratePlayerHit ||
+      (undefined !== encounterContext &&
+        true === attackInput.encounterRules?.playerAlwaysAccurate?.(encounterContext, attack)),
     guaranteedMaximum: guaranteedMaximum,
     ...(playerMinimumHit === undefined || encounterContext === undefined
       ? {}
       : {
-          minimumDamage: (maximumRolledDamage) => playerMinimumHit(maximumRolledDamage, encounterContext),
+          minimumDamage: (maximumRolledDamage) => playerMinimumHit(maximumRolledDamage, encounterContext, attack),
         }),
   });
 }

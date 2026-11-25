@@ -1,13 +1,16 @@
-// How the fixture encounter is registered: the same three lists a contributor
-// adds a line to (docs/ADDING-AN-ENCOUNTER.md), with the lines put in when
-// the module is loaded instead of committed, so that the site never has the
-// fixture. The determinism harness applies them through its module hooks
+// How the fixture encounter is registered. A real encounter is found by its
+// directory: client/encounters/registry.js and presentations.js take every
+// encounter.js and presentation.js beside them (docs/ADDING-AN-ENCOUNTER.md).
+// The fixture is outside client/, so that the site never has it; its two
+// modules are added to what those two found, when the module is loaded. The
+// determinism harness does that through its module hooks
 // (tools/determinism/node-hooks.mjs), a browser test through the requests of
-// its page (serveFixture below).
+// its page (serveFixture below). From there on the fixture is registered,
+// ordered and checked as every encounter is.
 //
-// Each entry: the client module, a text of it that occurs once, what that
-// text becomes, and the import line the new text needs. The import goes to
-// the end of the module, so the modules it loads are evaluated in the order
+// Each entry: the client module, a line of it that occurs once, what that
+// line becomes, and the import the new line needs. The import goes to the
+// end of the module, so the modules it loads are evaluated in the order
 // they always were.
 import { readFileSync } from "node:fs";
 
@@ -17,21 +20,16 @@ export const fixtureDirectory = new URL("./", import.meta.url);
 
 export const registrations = [
   {
-    module: "engine/encounterKinds.js",
-    find: "var encounterDefinitions = [",
-    replace: 'var encounterDefinitions = [\n  { kind: "training_ground", variantKinds: [], slug: "training-ground", registered: true },',
-  },
-  {
     module: "encounters/registry.js",
-    find: "var registeredEncounterDefinitions = [",
-    replace: "var registeredEncounterDefinitions = [\n  trainingGroundDefinition,",
-    importLine: 'import { trainingGroundDefinition } from "/test-fixtures/training-ground/encounter.js";',
+    find: "const encounterModules = Object.entries(foundModules);",
+    replace: 'const encounterModules = Object.entries({ ...foundModules, "./training-ground/encounter.js": trainingGroundEncounter });',
+    importLine: 'import * as trainingGroundEncounter from "/test-fixtures/training-ground/encounter.js";',
   },
   {
     module: "encounters/presentations.js",
-    find: "export const presentationBuilders = [zebakPresentation, nexusPresentation",
-    replace: "export const presentationBuilders = [zebakPresentation, nexusPresentation, trainingGroundPresentation",
-    importLine: 'import { trainingGroundPresentation } from "/test-fixtures/training-ground/presentation.js";',
+    find: "const presentationModules = Object.entries(foundModules);",
+    replace: 'const presentationModules = Object.entries({ ...foundModules, "./training-ground/presentation.js": trainingGroundPresentation });',
+    importLine: 'import * as trainingGroundPresentation from "/test-fixtures/training-ground/presentation.js";',
   },
 ];
 
@@ -43,7 +41,7 @@ export function registerFixture(path, source) {
   return source.replace(registration.find, registration.replace) + (registration.importLine ? "\n" + registration.importLine + "\n" : "");
 }
 
-/** For a Playwright page: serves the fixture's modules and registers the fixture in the three client modules as they are served. */
+/** For a Playwright page: serves the fixture's modules and registers the fixture in the two client modules as they are served. */
 export async function serveFixture(page) {
   await page.route("**" + fixtureUrlPrefix + "**", (route) => {
     const path = new URL(route.request().url()).pathname;

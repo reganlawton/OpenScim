@@ -1,7 +1,9 @@
 // Runs the simulation engine without a browser and digests its state at every
 // tick, so that a refactor can be checked against the digests of the commit
-// before it. Scenarios are in scenarios/*.mjs; the recorded digests are in
-// test/determinism-digests.json and test/test-determinism.mjs compares them.
+// before it. Scenarios are in scenarios/*.mjs, every file there but common.mjs;
+// the recorded digests are in test/determinism-digests/, one file per scenario
+// (<scenario name>.json), and test/test-determinism.mjs compares them. So a
+// new encounter adds files of its own and edits none that another one edits.
 //
 //   node tools/determinism/harness.mjs                  run all, compare with the recorded digests
 //   node tools/determinism/harness.mjs --update         record the digests
@@ -27,11 +29,12 @@
 // interface and how it turns clicks into actions, the replay recorder and
 // player, and the cache loader beyond items and arenas.
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { register } from "node:module";
+import { dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const digestFile = "test/determinism-digests.json";
+export const digestDirectory = "test/determinism-digests";
 export const cacheZip = "client/osrs-cache/disk.zip";
 const cacheManifest = "client/osrs-cache/manifest.json";
 
@@ -94,7 +97,7 @@ export function loadEnvironment() {
       rendering.registerArenaConfig(descriptor.kind, arena);
     }
     // getEncounterControls: the controls of an encounter kind (mechanics toggles, debug actions), as the menus read them.
-    return { engineModule, objTypeLoader: cacheManager.getObjTypeLoader(), prepareArena, registry, controlsOf: rendering.getEncounterControls, rendering, cacheId: cacheManager.cacheInfo.id };
+    return { engineModule, objTypeLoader: cacheManager.getObjTypeLoader(), prepareArena, registry, controlsOf: rendering.getEncounterControls, rendering };
   })());
 }
 
@@ -408,16 +411,36 @@ export function difference(name, recorded, actual) {
   return `${name}: differs`;
 }
 
-/** The scenario files, or the one named (so that a file being edited cannot break the others). */
-export const scenarioFiles = ["engine", "shared", "yama", "inferno", "sol-heredit", "zebak", "fixture", "colosseum", "vardorvis", "doom-of-mokhaiotl", "general-graardor"];
+/** The scenario files: every scenarios/*.mjs but the helpers' (common.mjs), by name. A new file needs no line anywhere. */
+export const scenarioFiles = () =>
+  readdirSync(new URL("./scenarios/", import.meta.url)).filter((file) => file.endsWith(".mjs") && file !== "common.mjs").map((file) => file.slice(0, -4)).sort();
+// A scenario's name is the path of its digest file: lower case, so that no two differ by case alone, and no "..".
+const scenarioName = /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/;
+/** The scenarios of every file, or of the one named (so that a file being edited cannot break the others). */
 export async function loadScenarios(file) {
-  const lists = await Promise.all((file ? [file] : scenarioFiles).map((name) => import(`./scenarios/${name}.mjs`)));
-  const scenarios = lists.flatMap((module) => module.scenarios);
+  const lists = await Promise.all((file ? [file] : scenarioFiles()).map((name) => import(`./scenarios/${name}.mjs`)));
+  // A file whose scenarios need client modules that Node loads only through
+  // the module hooks (vendor.js) exports a function: it is called once the
+  // environment is loaded.
+  const resolved = await Promise.all(lists.map(async (module) => (typeof module.scenarios === "function" ? (await loadEnvironment(), module.scenarios()) : module.scenarios)));
+  const scenarios = resolved.flat();
   if (new Set(scenarios.map((scenario) => scenario.name)).size !== scenarios.length) throw new Error("two scenarios share a name");
+  for (const scenario of scenarios) if (!scenarioName.test(scenario.name)) throw new Error(`scenario name "${scenario.name}": lower case letters, digits, ". _ -", and "/" between parts`);
   return scenarios;
 }
 
-export const readRecorded = () => (existsSync(digestFile) ? JSON.parse(readFileSync(digestFile, "utf8")) : { scenarios: {} });
+const digestPath = (name) => `${digestDirectory}/${name}.json`;
+/** The recorded digests, by scenario name. */
+export function readRecorded() {
+  const scenarios = {};
+  const files = existsSync(digestDirectory) ? readdirSync(digestDirectory, { recursive: true }) : [];
+  for (const file of files) if (file.endsWith(".json")) scenarios[file.slice(0, -5).replaceAll("\\", "/")] = JSON.parse(readFileSync(`${digestDirectory}/${file}`, "utf8"));
+  return { scenarios };
+}
+function writeRecord(name, record) {
+  mkdirSync(dirname(digestPath(name)), { recursive: true });
+  writeFileSync(digestPath(name), JSON.stringify(record, null, 1) + "\n");
+}
 
 // ---------------------------------------------------------------------------
 
@@ -461,6 +484,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const valueOf = (name) => (flag(name) ? args[args.indexOf(name) + 1] : undefined);
   if (flag("--self-test")) {
     selfTest();
+  } else if (flag("--split")) {
+    // For a branch from before the digests were files: `--split <its determinism-digests.json> [--only <text>]`
+    // writes that file's records as they are, all or those whose name contains the text. Needs no cache.
+    // ponytail: one-off for the branches open when the layout changed; delete once they are merged.
+    const legacy = JSON.parse(readFileSync(valueOf("--split"), "utf8")).scenarios;
+    const names = Object.keys(legacy).filter((name) => !flag("--only") || name.includes(valueOf("--only")));
+    for (const name of names) writeRecord(name, legacy[name]);
+    console.log(`wrote ${names.length} digests to ${digestDirectory}/`);
   } else if (!existsSync(cacheZip)) {
     console.error(`${cacheZip} is missing: run "npm run assets" first`);
     process.exit(1);
@@ -492,22 +523,21 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       const only = valueOf("--only");
       const chosen = scenarios.filter((scenario) => !only || scenario.name.includes(only));
       const recorded = readRecorded();
-      const { cacheId } = await loadEnvironment();
       let failures = 0;
       for (const scenario of chosen) {
         const started = Date.now();
         const record = recordOf(await runScenario(scenario));
         const problem = flag("--update") ? null : difference(scenario.name, recorded.scenarios[scenario.name], record);
         if (problem) failures++;
-        recorded.scenarios[scenario.name] = flag("--update") ? record : recorded.scenarios[scenario.name];
+        if (flag("--update")) writeRecord(scenario.name, record);
         console.log(`${problem ? "DIFFERENT" : "ok       "} ${scenario.name.padEnd(34)} ${String(record.ticks).padStart(4)} ticks  ${record.outcome.padEnd(9)} ${record.final.slice(0, 12)}  ${Date.now() - started} ms${problem ? "\n  " + problem : ""}`);
       }
       if (flag("--update")) {
-        // Keep the file in scenario order and drop scenarios that no longer exist.
-        const all = await loadScenarios();
-        const kept = Object.fromEntries(all.filter((scenario) => recorded.scenarios[scenario.name]).map((scenario) => [scenario.name, recorded.scenarios[scenario.name]]));
-        writeFileSync(digestFile, JSON.stringify({ cache: cacheId, scenarios: kept }, null, 1) + "\n");
-        console.log(`recorded ${chosen.length} scenarios; ${digestFile} now holds ${Object.keys(kept).length}`);
+        // Drop the digests of scenarios that no longer exist.
+        const names = new Set((await loadScenarios()).map((scenario) => scenario.name));
+        const gone = Object.keys(recorded.scenarios).filter((name) => !names.has(name));
+        for (const name of gone) rmSync(digestPath(name));
+        console.log(`recorded ${chosen.length} scenarios${gone.length ? "; removed the digests of " + gone.join(", ") : ""}`);
       }
       process.exit(failures ? 1 : 0);
     }

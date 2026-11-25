@@ -14,7 +14,7 @@ const renderConfig = {
 
 // `BaseScene` is the scene class rendering.js hands every presentation. The
 // fixture draws nothing of its own, so it takes the class as it is.
-export const trainingGroundPresentation = (BaseScene) => ({
+export const presentation = (BaseScene) => ({
   kind: trainingGroundKind,
   renderConfig,
   sceneBuilder: (context) => buildScene(BaseScene, renderConfig, context),

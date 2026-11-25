@@ -116,3 +116,6 @@ export const generalGraardorPresentation = (BaseScene) => ({
     wikiUrl: "https://oldschool.runescape.wiki/w/General_Graardor/Strategies",
   },
 });
+
+// Auto-discovery contract used by encounters/presentations.js.
+export { generalGraardorPresentation as presentation };

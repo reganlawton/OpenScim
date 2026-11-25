@@ -2,7 +2,9 @@ import { zebakSoundNames } from "/toa/zebak/sounds.js";
 import { nexusKind, doorAt } from "/toa/nexus.js";
 import { soundEffectResponse, soundEffectUrl } from "/audio/soundEffects.js";
 import { colosseumLobbyLabel, getLobbyFights } from "/encounters/colosseum/lobby.js";
+import { loadSandboxCode } from "/encounters/sandbox/menuImport.js";
 import { attackRangesOptions, attackRangesDefaults, updateAttackRanges, listenForAttackRangesHotkey, describeHotkey } from "/plugins/attackRanges.js";
+import { projectileOverrideOptions, projectileOverrideDefaults, updateProjectileOverride } from "/plugins/projectileOverride.js";
 import { thrallSpells, THRALL_END_SOUND_ID } from "/engine/thralls.js";
 const zebakSoundSearch = location.pathname === "/zebak/" ? new URLSearchParams(location.search).get("sound") : null;
 import { toEsModule } from "./rolldown-runtime.js";
@@ -4138,7 +4140,8 @@ var Nle = ({
   );
 };
 function xle(h2, h3) {
-  return h3?.find((h4) => h4.encounterKind === h2)?.presetsKey ?? h2;
+  // routeVariants: variants that have a route and presets but no place in the menus (the sandbox's arenas).
+  return (h3 ?? cE.getDescriptorOfKindOrVariant(h2)?.routeVariants)?.find((h4) => h4.encounterKind === h2)?.presetsKey ?? h2;
 }
 var Tle = {
   27291: {attack: 80},
@@ -7257,6 +7260,18 @@ var _le = {
     naked: Ple,
   },
 };
+// Default loadouts written beside an encounter: its descriptor's `loadouts` (client/encounters/registry.js), the
+// presets by key, the first being the one a player starts with. An inventory there is a list of item ids, `null`
+// for an empty slot. "No Equipment" is added, as every kind above has it.
+for (const kind of cE.getRegisteredKinds()) {
+  const loadouts = cE.getDescriptor(kind)?.loadouts;
+  if (loadouts) {
+    _le[kind] = {
+      ...Object.fromEntries(Object.entries(loadouts).map(([key, preset]) => [key, { ...preset, inventory: gT((preset.inventory ?? []).map((id) => (id === null ? null : { id }))) }])),
+      naked: Ple,
+    };
+  }
+}
 for (const e of new Set(Object.values(_le))) {
   for (const [t, n] of Object.entries(e)) {
     if (!n.isFallback) {
@@ -7267,6 +7282,13 @@ for (const e of new Set(Object.values(_le))) {
     }
   }
 }
+// The sandbox (client/encounters/sandbox/) offers the presets of every fight.
+_le.sandbox = Object.fromEntries(
+  Object.entries(_le)
+    .filter(([kind]) => !/^yama_p3_/.test(kind))
+    .flatMap(([kind, presets]) => Object.entries(presets).filter(([key]) => key !== "naked").map(([key, preset]) => [kind + "__" + key, { ...preset, name: preset.name + " (" + (cE.getDescriptor(kind)?.displayName ?? kind) + ")" }])),
+);
+_le.sandbox.naked = Ple;
 var Hle = "yama_p3";
 var qle = "learner-mage";
 var Ble = gT([
@@ -8994,6 +9016,11 @@ var Bde = [
   qde(
     "Prayer Flick Helper",
     "Draws the last three game ticks as bars, newest at the top. Each prayer you toggle is marked where it landed inside its tick: <b>above</b> the line for a prayer going on, <b>below</b> it for one going off. With input lag configured, a trail runs back to where you toggled it.",
+  ),
+  qde(
+    "Projectile Override",
+    "Draws a boss's projectiles as another boss's, as the RuneLite plugin does, for players who find some hard to tell apart by colour or shape. Choose a boss for each boss, or <b>Random</b>. Purely visual.",
+    "projectileOverride",
   ),
   qde(
     "Status Bars",
@@ -17194,6 +17221,7 @@ var gpe = ({
                     },
                     hD.CkFau(baseEncounterKind, encounterKind),
                   ),
+                  baseEncounterKind === "sandbox" && (0, jsxRuntime.jsx)(SandboxCodeField, { onVariantChange: onVariantChange, onLoadoutChange: onLoadoutChange }),
                   hZ &&
                     (0, jsxRuntime.jsx)("section", {
                       className: "rail-section configurer-encounter-setup",
@@ -22996,6 +23024,16 @@ var Yme = [
         "prayer timing",
       ],
     }),
+    $me("projectileOverride", "Projectile Override", {
+      description: "Draws a boss's projectiles as another boss's projectiles.",
+      keywords: ["projectile", "colorblind", "colourblind", "accessibility", "recolor", "recolour", "swap projectiles"],
+    }),
+    ...projectileOverrideOptions.map((option) =>
+      _me("projectileOverride", "Projectile Override", option.label, {
+        description: option.info,
+        keywords: [],
+      }),
+    ),
     $me("statusBars", "Status Bars", {
       description:
         "Hitpoints and prayer bars either side of the inventory panel.",
@@ -23102,6 +23140,28 @@ var Yme = [
         "replay bar",
         "high dpi",
       ],
+    }),
+    _me("stretchedMode", "Stretched Mode", "Scale health bars, hitsplats and prayers with UI", {
+      description:
+        "Untick to size health bars, hitsplats and overhead prayers apart from the UI scale.",
+      keywords: [
+        "hp bar size",
+        "health bar size",
+        "overhead prayer size",
+        "hitsplat size",
+        "overlay scale",
+      ],
+    }),
+    _me("stretchedMode", "Stretched Mode", "Health bar, hitsplat and prayer scale", {
+      whenUnavailable: {
+        reason: "Untick Scale health bars, hitsplats and prayers with UI to use this.",
+        route: {
+          label: "Show the setting",
+          target: gs("stretchedMode", "Scale health bars, hitsplats and prayers with UI"),
+        },
+      },
+      description: "Sizes health bars, hitsplats and overhead prayers.",
+      keywords: ["hp bar size", "health bar size", "prayer size", "percent"],
     }),
     $me("tickAudioMetronome", "Tick Audio Metronome", {
       description: "Plays a soft tick-tock on every game tick.",
@@ -25068,6 +25128,59 @@ function afe({ enabled: enabled, onToggle: onToggle }) {
     }),
   });
 }
+// Health bars, hitsplats and overhead prayers: follow the UI scale, or a
+// scale of their own (CSS pixels per game pixel, as a percent).
+function sceneOverlayScaleSetting({
+  follow: follow,
+  onFollowToggle: onFollowToggle,
+  percent: percent,
+  onPercentChange: onPercentChange,
+}) {
+  return (0, jsxRuntime.jsxs)("div", {
+    className: "overlay-size-setting",
+    children: [
+      (0, jsxRuntime.jsx)(f5, {
+        isModified: !follow,
+        onReset: () => !follow && onFollowToggle(),
+        searchId: gs("stretchedMode", "Scale health bars, hitsplats and prayers with UI"),
+        children: (0, jsxRuntime.jsx)(fd, {
+          label: "Scale health bars, hitsplats and prayers with UI",
+          checked: follow,
+          onChange: onFollowToggle,
+        }),
+      }),
+      !follow &&
+        (0, jsxRuntime.jsxs)("div", {
+          className: "stretched-mode-heading",
+          "data-search-id": gs("stretchedMode", "Health bar, hitsplat and prayer scale"),
+          children: [
+            (0, jsxRuntime.jsx)("label", {
+              className: "plugin-group-label",
+              htmlFor: "stretched-mode-scene-overlay-scale",
+              title: "Sizes health bars, hitsplats and overhead prayers.",
+              children: "Health bar, hitsplat and prayer scale",
+            }),
+            (0, jsxRuntime.jsx)(dP, {
+              id: "stretched-mode-scene-overlay-scale",
+              value: percent,
+              min: 50,
+              max: 400,
+              step: 1,
+              fieldWidth: 38,
+              suffix: "%",
+              onMouseDown: tfe,
+              onChange: (lC) => {
+                const lE = Number.parseFloat(lC.target.value);
+                if (Number.isFinite(lE) && lE >= 50 && lE <= 400) {
+                  onPercentChange(Math.round(lE));
+                }
+              },
+            }),
+          ],
+        }),
+    ],
+  });
+}
 function ife({ pluginKey: pluginKey, options: options, onChange: onChange }) {
   const h6 = aW;
   return (0, jsxRuntime.jsxs)(jsxRuntime.Fragment, {
@@ -25205,14 +25318,16 @@ function ife({ pluginKey: pluginKey, options: options, onChange: onChange }) {
     ],
   });
 }
-function AttackRangesSettings({ pluginKey: pluginKey, options: options, onChange: onChange }) {
+// The options of a plugin that lists them as data: Attack Ranges by default,
+// Projectile Override with its own list (its options have no section).
+function AttackRangesSettings({ pluginKey: pluginKey, options: options, onChange: onChange, optionList = attackRangesOptions, defaults = attackRangesDefaults, sections = ["Options", "Styles"] }) {
   const set = (key, value) => onChange({ ...options, [key]: value });
   const row = (option, label, control) =>
     (0, jsxRuntime.jsx)(
       f5,
       {
-        isModified: options[option.key] !== attackRangesDefaults[option.key],
-        onReset: () => set(option.key, attackRangesDefaults[option.key]),
+        isModified: options[option.key] !== defaults[option.key],
+        onReset: () => set(option.key, defaults[option.key]),
         searchId: gs(pluginKey, option.label),
         children: (0, jsxRuntime.jsxs)("div", {
           className: "plugin-setting-row",
@@ -25234,8 +25349,8 @@ function AttackRangesSettings({ pluginKey: pluginKey, options: options, onChange
       return (0, jsxRuntime.jsx)(
         f5,
         {
-          isModified: value !== attackRangesDefaults[option.key],
-          onReset: () => set(option.key, attackRangesDefaults[option.key]),
+          isModified: value !== defaults[option.key],
+          onReset: () => set(option.key, defaults[option.key]),
           searchId: gs(pluginKey, option.label),
           children: (0, jsxRuntime.jsx)("div", {
             title: option.info,
@@ -25352,20 +25467,21 @@ function AttackRangesSettings({ pluginKey: pluginKey, options: options, onChange
     );
   };
   return (0, jsxRuntime.jsx)(jsxRuntime.Fragment, {
-    children: ["Options", "Styles"].map((section) =>
+    children: sections.map((section) =>
       (0, jsxRuntime.jsxs)(
         "div",
         {
           className: "plugin-group",
           children: [
-            (0, jsxRuntime.jsx)("div", {
-              className: "plugin-group-label",
-              children: section,
-            }),
-            ...attackRangesOptions.filter((option) => option.section === section).map(control),
+            section &&
+              (0, jsxRuntime.jsx)("div", {
+                className: "plugin-group-label",
+                children: section,
+              }),
+            ...optionList.filter((option) => option.section === section).map(control),
           ],
         },
-        section,
+        section ?? "options",
       ),
     ),
   });
@@ -25586,6 +25702,10 @@ var cfe = (0, React.memo)(
     onAttackRangesToggle: onAttackRangesToggle,
     attackRanges: attackRanges,
     onAttackRangesChange: onAttackRangesChange,
+    projectileOverrideEnabled: projectileOverrideEnabled,
+    onProjectileOverrideToggle: onProjectileOverrideToggle,
+    projectileOverride: projectileOverride,
+    onProjectileOverrideChange: onProjectileOverrideChange,
     prayerEnabled: prayerEnabled,
     onPrayerToggle: onPrayerToggle,
     prayerFlickOrbEnabled: prayerFlickOrbEnabled,
@@ -25638,6 +25758,10 @@ var cfe = (0, React.memo)(
     onStretchedModePluginToggle: onStretchedModePluginToggle,
     autoOverlayScaleEnabled: autoOverlayScaleEnabled,
     onAutoOverlayScaleToggle: onAutoOverlayScaleToggle,
+    sceneOverlaysFollowUiScale: sceneOverlaysFollowUiScale,
+    onSceneOverlaysFollowUiScaleToggle: onSceneOverlaysFollowUiScaleToggle,
+    sceneOverlayScalePercent: sceneOverlayScalePercent,
+    onSceneOverlayScalePercentChange: onSceneOverlayScalePercentChange,
     fixedLayout: kX = false,
     mobileLayout: kY = false,
     compactOrbsEnabled: compactOrbsEnabled,
@@ -27853,6 +27977,23 @@ var cfe = (0, React.memo)(
                       onToggle: onPrayerFlickToggle,
                     }),
                     (0, jsxRuntime.jsx)(efe, {
+                      label: "Projectile Override",
+                      pluginKey: "projectileOverride",
+                      isOn: projectileOverrideEnabled,
+                      onToggle: onProjectileOverrideToggle,
+                      hasSettings: true,
+                      expanded: l6.projectileOverride,
+                      onToggleExpand: () => lx("projectileOverride"),
+                      children: (0, jsxRuntime.jsx)(AttackRangesSettings, {
+                        pluginKey: "projectileOverride",
+                        options: projectileOverride,
+                        onChange: onProjectileOverrideChange,
+                        optionList: projectileOverrideOptions,
+                        defaults: projectileOverrideDefaults,
+                        sections: [null],
+                      }),
+                    }),
+                    (0, jsxRuntime.jsx)(efe, {
                       label: "Status Bars",
                       pluginKey: "statusBars",
                       isOn: statusBarsEnabled,
@@ -27997,6 +28138,12 @@ var cfe = (0, React.memo)(
                         (0, jsxRuntime.jsx)(afe, {
                           enabled: autoOverlayScaleEnabled,
                           onToggle: onAutoOverlayScaleToggle,
+                        }),
+                        (0, jsxRuntime.jsx)(sceneOverlayScaleSetting, {
+                          follow: sceneOverlaysFollowUiScale,
+                          onFollowToggle: onSceneOverlaysFollowUiScaleToggle,
+                          percent: sceneOverlayScalePercent,
+                          onPercentChange: onSceneOverlayScalePercentChange,
                         }),
                       ],
                     }),
@@ -31161,7 +31308,31 @@ function buildDescriptorSeoEntry(encounterKind) {
   if (!descriptor) {
     return;
   }
-  const { displayName, description } = descriptor;
+  const { displayName, description, seo } = descriptor;
+  // Texts written beside the encounter: its descriptor's `seo` (client/encounters/registry.js). With them the
+  // route is listed and indexed like those of the table above, unless it says `noindex`.
+  if (seo) {
+    const name = seo.name ?? displayName;
+    return {
+      name,
+      description: seo.summary ?? description,
+      buildRoute: (path) => {
+        const breadcrumbs = [{ name: "Home", path: "/" }, { name: seo.breadcrumb ?? name, path }];
+        return {
+          path,
+          title: seo.title + " | " + Yfe,
+          description: seo.description,
+          h1: seo.h1 ?? name,
+          intro: seo.intro ?? seo.description,
+          keywords: seo.keywords ?? [name],
+          ogImagePath: Jfe,
+          breadcrumbs,
+          jsonLd: [tye(breadcrumbs), { "@context": "https://schema.org", "@type": "VideoGame", name: "Old School RuneScape", alternateName: "OSRS", publisher: { "@type": "Organization", name: "Jagex" }, genre: ["MMORPG", "Role-playing game"], url: "https://oldschool.runescape.com/" }],
+          ...(seo.noindex ? { noindex: true } : {}),
+        };
+      },
+    };
+  }
   return {
     name: displayName,
     description,
@@ -33231,6 +33402,7 @@ var _ye = (0, React.memo)(
     visible: visible,
     onClose: onClose,
     onOpenShortcuts: onOpenShortcuts,
+    onOpenWhatsNew: onOpenWhatsNew,
     onOpenCredits: onOpenCredits,
     simulationControls: simulationControls,
     displayControls: displayControls,
@@ -33365,6 +33537,16 @@ var _ye = (0, React.memo)(
                     (0, jsxRuntime.jsx)(_ge, {
                       search: hk,
                       fieldId: fieldId,
+                    }),
+                    (0, jsxRuntime.jsx)(eB, {
+                      type: "button",
+                      className: "panel-header-action",
+                      onClick: onOpenWhatsNew,
+                      hint: "What's New",
+                      "aria-label": "See what's new in OpenScim",
+                      children: (0, jsxRuntime.jsx)(dy, {
+                        glyph: "news",
+                      }),
                     }),
                     (0, jsxRuntime.jsx)(CommunityLinks, {
                       className: "panel-header-action",
@@ -36585,6 +36767,158 @@ var Mbe = ({ visible: visible, width: width, height: height }) =>
 var Pbe = ["All", "Encounters", "Combat", "Training", "Plugins", "Interface"];
 var Ibe = [
   {
+    date: "2026-11-24",
+    id: "2026-11-24-zebak",
+    category: "Encounters",
+    title: "Zebak",
+    impact:
+      "The first Tombs of Amascut boss is in. More ToA bosses are on the way.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-vardorvis",
+    category: "Encounters",
+    title: "Vardorvis",
+    impact:
+      "Vardorvis is in, including the awakened version.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-doom-of-mokhaiotl",
+    category: "Encounters",
+    title: "Doom of Mokhaiotl",
+    impact:
+      "You can now fight the Doom of Mokhaiotl.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-thralls",
+    category: "Combat",
+    title: "Thralls",
+    impact:
+      "Thralls can now be summoned.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-zaryte-crossbow-and-bolt-specs",
+    category: "Combat",
+    title: "Zaryte crossbow and bolt specs",
+    impact:
+      "The Zaryte crossbow special attack and all enchanted bolt specials now work.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-eldritch-nightmare-staff-spec",
+    category: "Combat",
+    title: "Eldritch nightmare staff",
+    impact:
+      "The Eldritch nightmare staff special attack now works.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-arkan-blade-spec",
+    category: "Combat",
+    title: "Arkan blade",
+    impact:
+      "The Arkan blade special attack now works.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-accursed-sceptre-spec",
+    category: "Combat",
+    title: "Accursed sceptre",
+    impact:
+      "The Accursed sceptre special attack now works.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-sanguinesti-staff",
+    category: "Combat",
+    title: "Sanguinesti staff",
+    impact:
+      "The Sanguinesti staff now has its healing effect.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-necklace-of-rupture",
+    category: "Combat",
+    title: "Necklace of rupture",
+    impact:
+      "The Necklace of rupture can now be equipped.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-slayer-staff",
+    category: "Combat",
+    title: "Slayer's staff",
+    impact:
+      "The Slayer's staff can now be equipped.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-torva-platebody-left-click",
+    category: "Combat",
+    title: "Torva platebody fix",
+    impact:
+      "Left-clicking the Torva platebody now equips it.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-attack-range-plugin",
+    category: "Plugins",
+    title: "Attack Range",
+    impact:
+      "The new Attack Range plugin shows how far you can attack from where you stand.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-hp-bars",
+    category: "Interface",
+    title: "HP bars",
+    impact:
+      "Default HP bars are back, and the HD bars moved to the Interface Styles plugin. HP bars now have the right scale and follow the player as they should.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-prayer-icon-scale",
+    category: "Interface",
+    title: "Prayer icon scale",
+    impact:
+      "Prayer icons now scale correctly.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-inventory-switch-lag",
+    category: "Interface",
+    title: "Faster item switching",
+    impact:
+      "Switching inventory items no longer lags or lands late.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-inventory-keybind-tab",
+    category: "Interface",
+    title: "Inventory keybind on Tab",
+    impact:
+      "The inventory keybinding can now be set to Tab.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-performance",
+    category: "Interface",
+    title: "Performance",
+    impact:
+      "OpenScim runs faster.",
+  },
+  {
+    date: "2026-11-24",
+    id: "2026-11-24-architecture",
+    category: "Interface",
+    title: "Under the hood",
+    impact:
+      "Large internal clean-up that makes new encounters and fixes quicker to add.",
+  },
+  {
     date: "2026-11-13",
     id: "2026-11-13-stretch-to-window",
     category: "Plugins",
@@ -37653,6 +37987,14 @@ var Ibe = [
     impact: "Game audio, with volume controls in Settings.",
   },
 ];
+// Entries written as files: the default export of every client/whats-new/*.js, so that two pull requests that each
+// announce something edit no list. A new entry is a file there, not a line above. It stands before the entries
+// above of its date and of earlier ones; the files of one date go by id. (Oldest first here: each is put in front.)
+const whatsNewFiles = Object.values(import.meta.glob("/whats-new/*.js", { eager: true, import: "default" })).sort((a, b) => a.date.localeCompare(b.date) || b.id.localeCompare(a.id));
+for (const entry of whatsNewFiles) {
+  const at = Ibe.findIndex((listed) => !listed.date || listed.date <= entry.date);
+  Ibe.splice(at < 0 ? Ibe.length : at, 0, entry);
+}
 var Abe = [
   "Jan",
   "Feb",
@@ -38350,6 +38692,11 @@ function Qbe(h2) {
 }
 Xbe(Ybe);
 Xbe(Jbe);
+// Presets written beside an encounter: its descriptor's `tileMarkerPresets` (client/encounters/registry.js). A
+// marker there is the arguments of Hbe above: [x, y, "#AARRGGBB", label?, fillOpacity?].
+for (const kind of cE.getRegisteredKinds()) {
+  Xbe((cE.getDescriptor(kind)?.tileMarkerPresets ?? []).map((preset) => ({ ...preset, encounterKind: kind, markers: preset.markers.map((marker) => Hbe(...marker)) })));
+}
 var eve = "Check your gear, then press Start.";
 var tve = [...W, ...aP, D];
 var nve = {
@@ -40209,6 +40556,39 @@ function $we(h2, h3) {
   return (
     h4.length === Object.keys(h3).length && h4.every((h5) => h2[h5] === h3[h5])
   );
+}
+// The sandbox's setup window: paste a scenario's code, link or JSON
+// (client/encounters/sandbox/menuImport.js); the window switches to its arena.
+function SandboxCodeField({ onVariantChange, onLoadoutChange }) {
+  const [text, setText] = (0, React.useState)("");
+  const [message, setMessage] = (0, React.useState)(null);
+  const load = () => {
+    try {
+      const loaded = loadSandboxCode(text);
+      onVariantChange?.(loaded.encounterKind);
+      if (loaded.gear) onLoadoutChange?.(loaded.gear);
+      setMessage({ ok: true, text: 'Loaded "' + loaded.name + '" (' + loaded.arenaName + ", " + loaded.npcCount + " monsters). Start Encounter plays it." });
+    } catch (error) {
+      setMessage({ ok: false, text: error.message });
+    }
+  };
+  return (0, jsxRuntime.jsxs)("section", {
+    className: "rail-section sandbox-code-field",
+    "aria-label": "Load a scenario",
+    children: [
+      (0, jsxRuntime.jsx)("h3", { className: "section-label", children: "Load a scenario" }),
+      (0, jsxRuntime.jsx)("textarea", {
+        value: text,
+        rows: 3,
+        placeholder: "Paste a code (OSB1...), a link or JSON",
+        onChange: (event) => setText(event.target.value),
+        onKeyDown: (event) => event.stopPropagation(),
+        style: { width: "100%", boxSizing: "border-box", resize: "vertical", font: "inherit", color: "inherit", background: "var(--color-surface-inset, #14100c)", border: "1px solid var(--color-border, #5d5245)", borderRadius: 3, padding: "4px 6px" },
+      }),
+      (0, jsxRuntime.jsx)("button", { type: "button", className: "osrs-btn osrs-btn--default", disabled: text.trim() === "", onClick: load, style: { marginTop: 6 }, children: "Load scenario" }),
+      message && (0, jsxRuntime.jsx)("p", { role: "status", style: { margin: "6px 0 0", fontSize: 12, color: message.ok ? "var(--color-success, #5fd35f)" : "var(--color-error, #ff5a4f)" }, children: message.text }),
+    ],
+  });
 }
 function _we(h2) {
   return xle(h2, cE.getDescriptorOfKindOrVariant(h2)?.variants);
@@ -42710,7 +43090,7 @@ function Ike(h2, h3) {
   if (h2 === h6) {
     return h7;
   }
-  const h8 = h5?.variants?.find((h9) => h9.encounterKind === h2);
+  const h8 = (h5?.variants ?? h5?.routeVariants)?.find((h9) => h9.encounterKind === h2);
   if (h8) {
     if (h8.encounterKind === h6) {
       return h7;
@@ -42807,7 +43187,7 @@ function Ake(h2, h3, h4, h5, h6, h7 = Mke) {
         }
         const hs = hk[1];
         const ht = hs.replace(/-/g, "_");
-        const hu = descriptor.variants?.find((hv) => hv.id === ht);
+        const hu = (descriptor.variants ?? descriptor.routeVariants)?.find((hv) => hv.id === ht);
         if (hu) {
           return hu.encounterKind;
         } else {
@@ -49400,6 +49780,8 @@ function eCe({ devHarness: devHarness } = {}) {
     uiScale: uiScale,
     stretchedModePluginEnabled: stretchedModePluginEnabled,
     autoOverlayScaleEnabled: autoOverlayScaleEnabled,
+    sceneOverlaysFollowUiScale: sceneOverlaysFollowUiScale,
+    sceneOverlayScalePercent: sceneOverlayScalePercent,
     showTickCounter: showTickCounter,
     showTickCounterOverhead: showTickCounterOverhead,
     tickCounterAbovePrayerIcon: tickCounterAbovePrayerIcon,
@@ -49452,6 +49834,8 @@ function eCe({ devHarness: devHarness } = {}) {
     interfaceStylesHdHealthBars: interfaceStylesHdHealthBars,
     attackRangesEnabled: attackRangesEnabled,
     attackRanges: attackRanges,
+    projectileOverrideEnabled: projectileOverrideEnabled,
+    projectileOverride: projectileOverride,
     prayerEnabled: prayerEnabled,
     prayerFlickOrbEnabled: prayerFlickOrbEnabled,
     prayerFlickAlwaysOn: prayerFlickAlwaysOn,
@@ -50079,6 +50463,42 @@ function eCe({ devHarness: devHarness } = {}) {
     updateStartingHpPerEncounter: lK,
     devHarness: h5,
   });
+  // The sandbox (client/encounters/sandbox/editor.js) reaches the loadout
+  // through three window events: "sandbox-open-setup" opens the setup window
+  // of a kind (loadout, presets, Start Encounter); "sandbox-get-loadout"
+  // hands detail.reply the sandbox's loadout; "sandbox-apply-loadout" sets
+  // the loadout a scenario carries and enters detail.encounterKind with it.
+  const sandboxEnterRef = (0, React.useRef)(null);
+  (0, React.useEffect)(() => {
+    const open = (event) => setSelectedLobbyEncounter(event.detail);
+    const get = (event) => event.detail.reply(getLoadout("sandbox"));
+    const apply = (event) => {
+      setLoadout("sandbox", event.detail.loadout);
+      sandboxEnterRef.current = event.detail.encounterKind;
+      // Entered once the loadout is in the state (below), or at the latest now.
+      setTimeout(() => {
+        if (sandboxEnterRef.current) {
+          const kind = sandboxEnterRef.current;
+          sandboxEnterRef.current = null;
+          enterEncounter(kind);
+        }
+      }, 50);
+    };
+    window.addEventListener("sandbox-open-setup", open);
+    window.addEventListener("sandbox-get-loadout", get);
+    window.addEventListener("sandbox-apply-loadout", apply);
+    return () => {
+      window.removeEventListener("sandbox-open-setup", open);
+      window.removeEventListener("sandbox-get-loadout", get);
+      window.removeEventListener("sandbox-apply-loadout", apply);
+    };
+  }, [setSelectedLobbyEncounter, getLoadout, setLoadout, enterEncounter]);
+  (0, React.useEffect)(() => {
+    if (!sandboxEnterRef.current) return;
+    const kind = sandboxEnterRef.current;
+    sandboxEnterRef.current = null;
+    enterEncounter(kind);
+  }, [enterEncounter]);
   const mm =
     "encounter" === sceneState.kind
       ? sceneState.encounterKind
@@ -52610,6 +53030,9 @@ function eCe({ devHarness: devHarness } = {}) {
     simulationState.playerPosition,
     simulationState.npcs,
   ]);
+  (0, React.useEffect)(() => {
+    updateProjectileOverride({ enabled: projectileOverrideEnabled, settings: projectileOverride });
+  }, [projectileOverrideEnabled, projectileOverride]);
   const rM = h3.KyWIA(displayOverlays2, ow);
   const rN = null !== displayOverlays2;
   const rO = (0, React.useMemo)(() => {
@@ -53720,6 +54143,7 @@ function eCe({ devHarness: devHarness } = {}) {
               visible: kR,
               onClose: () => kX(false),
               onOpenShortcuts: () => hG(true),
+              onOpenWhatsNew: () => hL(true),
               onOpenCredits: () => hI(true),
               simulationControls: {
                 onReset: handleReset,
@@ -54112,6 +54536,11 @@ function eCe({ devHarness: devHarness } = {}) {
                                     chromeScale: o1,
                                     stretchedModePluginEnabled:
                                       stretchedModePluginEnabled,
+                                    sceneOverlayScale:
+                                      stretchedModePluginEnabled &&
+                                      !sceneOverlaysFollowUiScale
+                                        ? sceneOverlayScalePercent / 100
+                                        : null,
                                     overlayOuterScale: qR,
                                     framePaintScale: qT,
                                     replayViewportWidth: nU.width,
@@ -54191,6 +54620,7 @@ function eCe({ devHarness: devHarness } = {}) {
                                                 open: kY,
                                                 inset: nT.right,
                                                 onToggle: () => kZ((sP) => !sP),
+                                                onWhatsNew: () => hL(true),
                                               }
                                             : null,
                                           modifiers: sF,
@@ -54534,6 +54964,11 @@ function eCe({ devHarness: devHarness } = {}) {
                 hS("attackRangesEnabled", !attackRangesEnabled),
               attackRanges: attackRanges,
               onAttackRangesChange: (sP) => hS("attackRanges", sP),
+              projectileOverrideEnabled: projectileOverrideEnabled,
+              onProjectileOverrideToggle: () =>
+                hS("projectileOverrideEnabled", !projectileOverrideEnabled),
+              projectileOverride: projectileOverride,
+              onProjectileOverrideChange: (sP) => hS("projectileOverride", sP),
               prayerEnabled: prayerEnabled,
               onPrayerToggle: () => hS("prayerEnabled", !prayerEnabled),
               prayerFlickOrbEnabled: prayerFlickOrbEnabled,
@@ -54599,6 +55034,12 @@ function eCe({ devHarness: devHarness } = {}) {
               autoOverlayScaleEnabled: autoOverlayScaleEnabled,
               onAutoOverlayScaleToggle: () =>
                 hS("autoOverlayScaleEnabled", !autoOverlayScaleEnabled),
+              sceneOverlaysFollowUiScale: sceneOverlaysFollowUiScale,
+              onSceneOverlaysFollowUiScaleToggle: () =>
+                hS("sceneOverlaysFollowUiScale", !sceneOverlaysFollowUiScale),
+              sceneOverlayScalePercent: sceneOverlayScalePercent,
+              onSceneOverlayScalePercentChange: (sP) =>
+                hS("sceneOverlayScalePercent", sP),
               onUiScaleChange: commit2,
               fixedLayoutScale: fixedLayoutScale,
               onFixedLayoutScaleChange: (sP) => hS("fixedLayoutScale", sP),

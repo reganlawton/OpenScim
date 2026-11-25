@@ -16974,26 +16974,23 @@ function withThrallRenderConfig(config) {
   return withThralls;
 }
 // RuneLite's stretched mode: the game draws at the window's size divided by a
-// fixed factor and stretches the picture back up, so a bar is always 30x5
-// game pixels times that factor on screen, while the scene (its zoom follows
-// the viewport height) comes out the same size as ours. The overlay model is
+// factor and stretches the picture back up, so a bar is always 30x5 game
+// pixels times that factor on screen, while the scene (its zoom follows the
+// viewport height) comes out the same size as ours. The overlay model is
 // built in game pixels and its layers scaled by `overlayScale`
-// (scaleOverlayLayers): this many device pixels per game pixel, as tsps does
-// (client/render/render/quality.ts, computeUiRenderMetrics). A whole number
-// keeps the bars' edges on device pixels.
-// Measured: observer crops doom-20261123-192925 and Pictures/hp_test.png,
-// the 30x5 bar drawn 90x15, the 25 px prayer 75.
-// ponytail: fixed factor, make it a setting (RuneLite's scaling %) when
-// someone plays at another one.
-var OVERLAY_DEVICE_PIXELS_PER_GAME_PIXEL = 3;
+// (scaleOverlayLayers), as tsps does (client/render/render/quality.ts,
+// computeUiRenderMetrics). The factor is the interface's own: CSS pixels per
+// game pixel of the Fixed frame, or the Stretched Mode UI scale in the
+// resizable layouts (Grid.js passes it as `overlayGameScale`), so the bars,
+// hitsplats and prayers match the inventory and orbs at every setting.
+// Measured at a 3x interface: observer crops doom-20261123-192925 and
+// Pictures/hp_test.png, the 30x5 bar drawn 90x15, the 25 px prayer 75.
 var OVERLAY_LAYER_SELECTOR =
   "[data-overhead-icons],[data-tick-counters],[data-overhead-texts],[data-hitsplats],[data-healthbars],[data-timerbars]";
 // The camera the overlay renderer projects with: screen points in game
 // pixels. Only the 3D camera (it has a viewport) projects like the game.
-function overlayCamera(camera, model) {
-  const k = camera.viewport
-    ? OVERLAY_DEVICE_PIXELS_PER_GAME_PIXEL / (globalThis.devicePixelRatio || 1)
-    : 1;
+function overlayCamera(camera, model, gameScale) {
+  const k = camera.viewport && gameScale > 0 ? gameScale : 1;
   model.overlayScale = k;
   if (k === 1) {
     return camera;
@@ -37536,7 +37533,10 @@ var sP = class {
     ce(this, "config", undefined);
     ce(this, "cycle", undefined);
     ce(this, "motion", null);
-    this.config = e;
+    // The plugin Projectile Override (client/plugins/projectileOverride.js):
+    // the spot animation this flight is drawn with, settled as it starts.
+    const spotAnimId = overrideProjectile(e.spotAnimId, e.instanceId);
+    this.config = spotAnimId === e.spotAnimId ? e : { ...e, spotAnimId, overridden: true };
     this.cycle = e.startCycle;
   }
   sample(e) {
@@ -37656,6 +37656,11 @@ var sP = class {
         e.despawn(instanceId);
         return t.kind;
       case "active": {
+        // An override is not among the fight's spot animations: it is loaded
+        // the first time it flies, from the loader the renderer was given.
+        if (this.config.overridden && !e.isLoaded(spotAnimId) && e.boundLoader) {
+          e.xv(e.boundLoader, spotAnimId);
+        }
         if (!e.isLoaded(spotAnimId)) {
           e.despawn(instanceId);
           return "active";
@@ -47480,7 +47485,7 @@ var SceneCompositor = class e {
     fy.Dk("spotAnims");
     fy.Lk("uiOverlays");
     this.uiOverlayRenderer.setTerrainHeights(this.terrainHeights);
-    const uiCamera = overlayCamera(a, n);
+    const uiCamera = overlayCamera(a, n, options?.overlayGameScale);
     const Y = this.WH(simulationState.npcs);
     const X = H
       ? simulationState.npcs
@@ -54833,7 +54838,8 @@ var iN = class extends SceneCompositor {
     return this.npcInstanceManager.LA(e, a * 20) ?? 0;
   }
   async UD(e) {
-    this.spotAnimRenderer.preload(e, [...ox]);
+    // With those of the render config: the sandbox's monsters beside Sol (client/encounters/sandbox/).
+    this.spotAnimRenderer.preload(e, [...ox, ...(this.encounterRenderConfig?.spotAnimIds ?? [])]);
   }
   OD() {
     return ox.every((e) => this.spotAnimRenderer.isLoaded(e));
@@ -55670,6 +55676,10 @@ function KN(e, a, t, n, s = 0) {
 var qN = class extends SceneCompositor {
   constructor() {
     super();
+    // The animations other NPCs announce as "colosseum_visual" events, as
+    // Sol Heredit's scene plays them: the sandbox's monsters beside Yama
+    // (client/encounters/sandbox/brawler.js).
+    ce(this, "visuals", new OE(this.spotAnimRenderer));
     ce(this, "waveController", new jN());
     ce(this, "attackController", new ZW());
     ce(this, "fireballController", new IN());
@@ -55697,8 +55707,13 @@ var qN = class extends SceneCompositor {
     this.fD("yama-frame-audio", () => {
       this.frameSoundTracker?.reset();
     });
+    // The other NPCs' visuals go on a replay jump, as Sol Heredit's scene clears them.
+    this.fD("yama-other-visuals", () => {
+      this.visuals.clear();
+    });
   }
   dispose() {
+    this.visuals.clear();
     this.waveController.Sz(this.spotAnimRenderer);
     this.attackController.Sz(this.spotAnimRenderer);
     this.fireballController.Sz(this.spotAnimRenderer);
@@ -55740,6 +55755,11 @@ var qN = class extends SceneCompositor {
       this.waveController.consumeEvents(e);
       this.attackController.consumeEvents(e);
       this.voidFlareController.consumeEvents(e);
+      this.visuals.consume(e);
+    }
+    // A despawned NPC's pending animations and graphics go with it, as in Sol Heredit's scene.
+    for (const event of e) {
+      if (mB(event, "actor_despawned")) this.visuals.oM(event.actorId);
     }
   }
   KD(e) {
@@ -55867,9 +55887,37 @@ var qN = class extends SceneCompositor {
     );
   }
   lH(e, a) {
+    // The other NPCs' animations (see the constructor), as Sol Heredit's scene starts them.
+    // Nothing changes for Yama's own fight, which has no such events.
+    const cycle = (a ?? e.currentTick) * 30;
+    let played = false;
+    for (const cue of this.visuals.gM(cycle)) {
+      const npc = e.npcs.find((candidate) => candidate.id === cue.cue.actorId);
+      if (!npc || !TR(npc, cue.cycle)) continue;
+      if (this.encounterRenderConfig?.preloadNpcTypes?.find((entry) => entry.npcTypeId === npc.npcTypeId)?.attackClips?.[cue.cue.clipId] === undefined) continue;
+      this.bD(cue.cycle);
+      this.npcInstanceManager.PA(0, 1, [{ actorId: this.getNpcRenderInstanceId(cue.cue.actorId), trigger: "attack", clipId: cue.cue.clipId, tick: cue.cycle / 30 }]);
+      played = true;
+    }
+    if (played) this.bD(cycle);
+    // Their graphics, where an NPC or the player is drawn now (as Sol Heredit's scene finds them).
+    this.visuals.render(cycle, this.terrainHeights, (actorId) => {
+      if (actorId === "player") {
+        const tile = this.otherVisualsPlayerTile;
+        return tile ? { position: [tile[0] + 0.5, tile[1] + 0.5, -Nb(this.terrainHeights, tile[0] + 0.5, tile[1] + 0.5) / 128] } : null;
+      }
+      if (!e.npcs.some((npc) => npc.id === actorId && TR(npc, this.primaryCycle))) return null;
+      const matrix = this.npcInstanceManager.Gg(this.getNpcRenderInstanceId(actorId));
+      return matrix ? { position: [matrix[12], matrix[13], matrix[14]], yaw2048: (Math.atan2(matrix[8], matrix[0]) * 2048) / (Math.PI * 2) } : null;
+    });
     return WR(e);
   }
   oH(e, a, t, n, s, r, i, l) {
+    // The other NPCs' projectiles (see the constructor), as Sol Heredit's scene flies them.
+    this.otherVisualsPlayerTile = [...t];
+    if (!l) {
+      this.visuals.mM({ cycle: this.primaryCycle, resolveActor: this.aH(t), terrainHeights: this.terrainHeights, resolveSurfaceHeight: this.resolveSurfaceHeight }, undefined, this.replayProjectileWork);
+    }
     if (l || i?.yamaMageRange === false) {
       this.attackController.Sz(this.spotAnimRenderer);
     } else {
@@ -55934,7 +55982,8 @@ var qN = class extends SceneCompositor {
   }
   async MM(e) {
     this.spotAnimModelLoader = e;
-    this.spotAnimRenderer.preload(e, ON);
+    // With those of the render config: the sandbox's monsters beside Yama (client/encounters/sandbox/).
+    this.spotAnimRenderer.preload(e, [...ON, ...(this.encounterRenderConfig?.spotAnimIds ?? [])]);
     await this.xM(e);
   }
   HM() {
@@ -57358,6 +57407,7 @@ import {scaleToaAccuracyRoll} from "/toa/zebak/rules.js";
 import {gatewayMeshes, gatewayPortals, gatewayCovers, gatewayFloor, extendLobbyArena, loadGatewayObjects, drawGatewayObjects} from "/lobby/gateways.js";
 import {toaFragmentShader} from "/toa/shader.js";
 import {getAttackRangeOverlay} from "/plugins/attackRanges.js";
+import {overrideProjectile} from "/plugins/projectileOverride.js";
 import {dt2FragmentShader} from "/dt2/shader.js";
 import { LobbyEncounter } from "../encounters/lobby/LobbyEncounter.js";
 import { divineSeveranceContract, forfeitBreathContract, sensoryCloudingContract, bloodiedBlowsContract, glyphicAttenuationContract, yamaContractVariants } from "../encounters/yama/contracts.js";
@@ -57606,7 +57656,8 @@ var VV = {
 var KV = [
   // The presentations written in modules (encounters/presentations.js), each
   // a function of the base scene; the chunk's own four follow.
-  ...presentationBuilders.map((buildPresentation) => buildPresentation(InfernoScene, packHsl, { widgetModelView })),
+  // presentationOf(kind): another kind's presentation, looked up when called (the sandbox draws a host's scene).
+  ...presentationBuilders.map((buildPresentation) => buildPresentation(InfernoScene, packHsl, { widgetModelView, presentationOf: (kind) => ZV(kind) })),
   {
     kind: "yama_p3",
     sceneBuilder: (e) => new ZN(e),
@@ -58027,27 +58078,55 @@ var oK = new Float32Array([
 // the game. It is drawn from far off with a narrow view, which is
 // orthographic within 2% over the depth of such a model. `width` and
 // `height` are the widget's, in interface pixels; the canvas is transparent
-// where the model is not. setSequence
+// where the model is not. Its faces that are not opaque are drawn in the
+// order of their render priorities (the model's), lowest first, as the
+// game's painter draws them: a face of a higher priority covers one of a
+// lower whatever their depth (the strangle's spore keeps its glow, priority
+// 2, under its body, 4). Within a priority they keep the pose's order; the
+// game's puts the farthest first, and its 10 and 11 among the others by
+// depth: not done. setSequence
 // switches the animation (an interface's script does, between spawn, idle and
 // despawn).
 // client/encounters/vardorvis/strangle.js draws the strangle's overlay with it.
+// The triangles of a mesh part (Pb), each 3 vertices, reordered by the render
+// priority of the model face each came from (0 to 11), keeping the order of
+// those of one priority.
+function inFacePriorityOrder(part, modelFaceIndices, priorities) {
+  const count = modelFaceIndices.length;
+  const priorityOf = (tri) => Math.min(11, Math.max(0, priorities[modelFaceIndices[tri]] ?? 0));
+  const order = Array.from({ length: count }, (_, tri) => tri).sort((a, b) => priorityOf(a) - priorityOf(b) || a - b);
+  const permute = (values, perTri) => {
+    if (!values) return values;
+    const out = new values.constructor(values.length);
+    order.forEach((tri, at) => out.set(values.subarray(tri * perTri, (tri + 1) * perTri), at * perTri));
+    return out;
+  };
+  return {
+    positions: permute(part.positions, 9),
+    normals: permute(part.normals, 9),
+    hslColors: permute(part.hslColors, 3),
+    alphas: permute(part.alphas, 3),
+    faceBias: permute(part.faceBias, 3),
+    uvs: permute(part.uvs, 6),
+    textureIds: permute(part.textureIds, 3),
+  };
+}
 function widgetModelView({ canvas, width, height, dpr, npcModelLoader, animationSystem, modelId, seqId, zoom, orthographic = false, baseHeight = height }) {
   const model = npcModelLoader.modelLoader.getModel(modelId);
   if (!model) {
     throw new Error(`Interface model ${modelId} did not load`);
   }
+  restoreWidgetModel(model);
   let top = 0;
   for (const y of model.verticesY) top = Math.min(top, y);
   const litColors = model.Rh(64, 768, -50, -10, -50);
-  // A pose keeps a copy of the vertices it starts each frame from: it is made
-  // from the model as loaded, not as the last pose left it. One per sequence.
-  const original = [new Int32Array(model.verticesX), new Int32Array(model.verticesY), new Int32Array(model.verticesZ)];
+  // A pose keeps a copy of the vertices and face alphas it starts each frame
+  // from: it is made from the model as loaded, not as the last pose left it.
+  // One per sequence.
   const poses = new Map();
   const poseOf = (id) => {
     if (!poses.has(id)) {
-      model.verticesX.set(original[0]);
-      model.verticesY.set(original[1]);
-      model.verticesZ.set(original[2]);
+      restoreWidgetModel(model);
       poses.set(id, iK({ hf: () => ({ mergedModel: model, litColors, widthScale: 128, heightScale: 128 }), loadNpcType: () => ({ idleSeqId: id }) },
         animationSystem, { npcTypeId: modelId, idleSeqId: id }));
     }
@@ -58085,6 +58164,9 @@ function widgetModelView({ canvas, width, height, dpr, npcModelLoader, animation
         return;
       }
       const parts = Pb(pose.poseAt(elapsedMs));
+      if (parts.transparent && parts.transparentModelFaceIndices && model.faceRenderPriorities) {
+        parts.transparent = inFacePriorityOrder(parts.transparent, parts.transparentModelFaceIndices, model.faceRenderPriorities);
+      }
       Iy(queue, clear);
       for (const [kind, part] of [["opaque", parts.opaque], ["transparent", parts.transparent]]) {
         if (!part) {
@@ -58111,6 +58193,28 @@ function widgetModelView({ canvas, width, height, dpr, npcModelLoader, animation
     },
     dispose,
   };
+}
+// The loader keeps one model of an id, and a pose leaves it as its last frame
+// left it, face alphas too (an animation's alpha transforms: the strangle's
+// spores add some on every frame). What a model is as loaded is kept the first
+// time a view is made of it and put back before anything is taken from it, so
+// that each pose, and each view made later, starts from it as the game does.
+const widgetModelsAsLoaded = new WeakMap();
+function restoreWidgetModel(model) {
+  const kept = widgetModelsAsLoaded.get(model);
+  if (!kept) {
+    widgetModelsAsLoaded.set(model, {
+      x: new Int32Array(model.verticesX),
+      y: new Int32Array(model.verticesY),
+      z: new Int32Array(model.verticesZ),
+      alphas: model.faceAlphas ? new Int8Array(model.faceAlphas) : null,
+    });
+    return;
+  }
+  model.verticesX.set(kept.x);
+  model.verticesY.set(kept.y);
+  model.verticesZ.set(kept.z);
+  if (kept.alphas && model.faceAlphas) model.faceAlphas.set(kept.alphas);
 }
 function dK(e) {
   const {
@@ -59859,7 +59963,6 @@ var dZ = ({
           s.style.position = "absolute";
           s.style.imageRendering = "pixelated";
           s.style.pointerEvents = "none";
-          s.style.filter = "drop-shadow(0 0 3px rgba(0, 0, 0, 0.8))";
           t.appendChild(s);
         }
         if (s.getAttribute("data-icon") !== n.iconPath) {
@@ -60896,6 +60999,7 @@ var bZ = ({
   showAttackTimerMetronome: X = false,
   showNpcAttackTimerMetronome: J = false,
   hdHealthBars: hdHealthBars,
+  overlayGameScale: overlayGameScale = 1,
   entityHider: Q = null,
   tzhaarHpTracker: ee = null,
   pillarAdditions: te = null,
@@ -61062,6 +61166,8 @@ var bZ = ({
   const Qa = (0, pn.useRef)(X);
   const et = (0, pn.useRef)(J);
   const hdHealthBarsRef = (0, pn.useRef)(hdHealthBars);
+  const overlayGameScaleRef = (0, pn.useRef)(overlayGameScale);
+  overlayGameScaleRef.current = overlayGameScale;
   const at = (0, pn.useRef)(Q);
   const tt = (0, pn.useRef)(ee);
   const nt = (0, pn.useRef)(te);
@@ -61764,7 +61870,6 @@ var bZ = ({
           s.style.position = "absolute";
           s.style.imageRendering = "pixelated";
           s.style.pointerEvents = "none";
-          s.style.filter = "drop-shadow(0 0 3px rgba(0, 0, 0, 0.8))";
           t.appendChild(s);
         }
         if (s.getAttribute("data-icon") !== n.iconPath) {
@@ -62579,6 +62684,7 @@ var bZ = ({
         events: n?.events ?? st.current ?? xa.current?.getLastTickEvents() ?? [],
         options: {
           renderMode: "3d",
+          overlayGameScale: overlayGameScaleRef.current,
           showCoordinates: Ba.current,
           tileGrid: Wa.current,
           showNpcClickbox: Pa.current,

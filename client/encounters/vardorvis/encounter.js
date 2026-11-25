@@ -18,6 +18,7 @@ import { getMonsterFormulaStats } from "../../engine/monsterStats.js";
 import { createSeededRandom } from "../../engine/random.js";
 import { isCorrectProtectionPrayer } from "../../engine/damage.js";
 import { CollisionFlag, createCollisionMap } from "../../engine/collision.js";
+import { getArenaCollisionMap } from "../../engine/arena.js";
 import { clearPlayerAttackTarget } from "../../engine/playerAttack/launch.js";
 import { rollNpcAttack, isNpcInAttackRange } from "../shared/npcAttack.js";
 import { getNpcPursuitMoves } from "../shared/npcMovement.js";
@@ -25,7 +26,7 @@ import { buildNpcProjectileVisual, healNpc } from "../shared/npcHelpers.js";
 import { emitInfernoNpcAttack, emitInfernoVisual } from "../inferno/events.js";
 
 export const vardorvisKind = "vardorvis";
-export const vardorvisAwakenedKind = "vardorvis_awakened"; // engine/encounterKinds.js
+export const vardorvisAwakenedKind = "vardorvis_awakened";
 // CACHE: the Ritual Site of the Stranglewood, region 4405. The arena is the
 // 13 x 13 inside the tendril barrier (OBS: 1123 to 1135, 3412 to 3424): the
 // barrier takes its edge, eight pillars stand inside.
@@ -152,6 +153,12 @@ const headProjectile = {
 };
 
 const key = ([x, y]) => x + "," + y;
+// The copies of the arena's collision that refineArenaConfig made: the only
+// ones the barrier is put on or taken off (another fight's are not touched).
+const barrierMaps = new WeakSet();
+const closeOrOpen = (map, closed) => {
+  for (const { tile: [x, y] } of barrierTiles) closed ? map.flag(x, y, CollisionFlag.OBJECT) : map.unflag(x, y, CollisionFlag.OBJECT);
+};
 // The tick's event buffer, for the heal's hitsplat: the engine's rules hook
 // (getEngineRules) is not handed one. Kept off the encounter, out of its state.
 const tickEventsOf = new WeakMap();
@@ -281,7 +288,7 @@ class VardorvisEncounter {
     this.held = null; // { start, holdTick, failTick, spores, endTick }
     this.strangles = 0;
     this.lastSetWasStrangle = false;
-    this.setBarrier?.(false);
+    this.setBarrier(false);
   }
   getSeeds() {
     return { encounterSeed: this.seed };
@@ -305,10 +312,23 @@ class VardorvisEncounter {
     if (!arena.collisionMap) return arena;
     const map = createCollisionMap(arena.collisionMap.sizeX, arena.collisionMap.sizeY);
     map.flags.set(arena.collisionMap.flags);
-    this.setBarrier = (closed) => {
-      for (const { tile: [x, y] } of barrierTiles) closed ? map.flag(x, y, CollisionFlag.OBJECT) : map.unflag(x, y, CollisionFlag.OBJECT);
-    };
+    barrierMaps.add(map);
+    if (this.barrierStands(this.tick)) closeOrOpen(map, true);
     return { ...arena, collisionMap: map };
+  }
+  // The barrier on the collision the engine moves the player on (engine/
+  // arena.js), when that is one of the copies above. The application applies
+  // the arena anew during a fight: when its collision has loaded, on a Take
+  // Over, when the cache is reloaded, and when it makes another engine of the
+  // fight. Each time it is a fresh copy, open: so the barrier is closed on
+  // every tick it stands, not on the one it rises (where, before the arena
+  // had loaded, there was nothing yet to close).
+  setBarrier(closed) {
+    const map = getArenaCollisionMap();
+    if (barrierMaps.has(map)) closeOrOpen(map, closed);
+  }
+  barrierStands(tick) {
+    return this.barrierTick !== null && tick !== undefined && tick >= this.barrierTick;
   }
   // OBS: the barrier rises on the first hit, and blocks a tick later.
   raiseBarrier(context) {
@@ -348,7 +368,7 @@ class VardorvisEncounter {
     const at = [...context.playerPos];
     tickEventsOf.set(this, context.tickEvents);
     if (boss?.alive) this.scaleStats(boss);
-    if (context.tick === this.barrierTick) this.setBarrier?.(true);
+    if (this.barrierStands(context.tick)) this.setBarrier(true);
     // OBS: an axe cuts whoever is under it, then moves; once per axe.
     for (const axe of this.axes.values()) if (!axe.cut && player?.alive && onFootprint(at, axe.actor.position, 3)) this.cut(axe, context, hits, at);
     for (const crack of this.cracks.filter((c) => c.tick === context.tick)) {
@@ -746,3 +766,6 @@ export const vardorvisDefinition = {
   variantFactories: { [vardorvisAwakenedKind]: () => new VardorvisEncounter(vardorvisAwakenedKind, versions.awakened) },
   variantControls: { [vardorvisAwakenedKind]: { defaultMechanicsConfig: {}, mechanicsToggles: [], debugActions: [] } },
 };
+// How the registry finds it (encounters/registry.js), and where it stands in the encounter picker.
+export { vardorvisDefinition as definition };
+export const order = 70;

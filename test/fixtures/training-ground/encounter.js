@@ -176,7 +176,7 @@ class TrainingGroundEncounter {
   }
 }
 
-export const trainingGroundDefinition = {
+export const definition = {
   kind: trainingGroundKind,
   factory: () => new TrainingGroundEncounter(),
   descriptor: {
@@ -189,6 +189,10 @@ export const trainingGroundDefinition = {
     // The arena is the tiles that can be walked to from `seed`.
     collision: { mode: "auto", seed: playerStart },
     victory: { title: "VICTORY", narrative: "SPARRING PARTNER DEFEATED", accent: "gold" },
+    // What the menus have of an encounter, written here and not in a table of application.js.
+    loadouts: { sparring: { name: "Sparring", equipment: { cape: 22109 /* Ava's assembler */ }, inventory: [6685 /* Saradomin brew */, null, 6685] } },
+    seo: { title: "Training Ground Simulator", description: "Spar with one partner in Yama's arena.", keywords: ["Training Ground"], noindex: true },
+    tileMarkerPresets: [{ id: "training_ground_ring", name: "Sparring ring", description: "Where the partner starts", markers: [[30, 30, "#FF14D74F", "Partner"], [31, 30, "#80D81414"]] }],
   },
   controls: {
     defaultMechanicsConfig: { [hardHitsKey]: false },

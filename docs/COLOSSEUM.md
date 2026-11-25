@@ -154,9 +154,9 @@ A monster's sounds come from two places.
   not heard doing it. OBS: the game sends the same sounds with the same
   ranges, on the frames the cache names.
 - **What the server sends**: in no file, so only OBS knows them. They are
-  the rules of `audio.js`, and their ids must be added to
-  `tools/assets/cache-groups.json` by hand (`test/test-colosseum-audio.mjs`
-  fails for one that is not).
+  the rules of `audio.js`, and their ids must be in a list of the trimmed
+  cache's groups (`node tools/cache-objects.mjs deps --add --to colosseum
+  sound:<id>`; `test/test-colosseum-audio.mjs` fails for one that is not).
 
 | Sound (CACHE's name) | When (OBS) | Here |
 |---|---|---|

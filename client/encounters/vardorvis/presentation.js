@@ -1,9 +1,11 @@
 // What draws Vardorvis: the default scene, with what it has to load, and the
-// strangle's overlay (strangle.js) brought in step with the fight every frame.
+// strangle's overlay (strangle.js) brought in step with the fight every frame;
+// and the head's sounds that are in no animation (audio.js).
 import { buildScene } from "../shared/buildScene.js";
 import { bossStart, ids, seqs, spots, vardorvisKind, vardorvisMapSquare } from "./encounter.js";
-import { setStrangleTools, syncStrangle } from "./strangle.js";
+import { disposeStrangle, setStrangleTools, syncStrangle } from "./strangle.js";
 import { drawHulls, removeHulls, withHighlights } from "./highlights.js";
+import { vardorvisAudio } from "./audio.js";
 
 const renderConfig = {
   terrainMapSquare: vardorvisMapSquare,
@@ -41,7 +43,7 @@ export const vardorvisPresentation = (BaseScene, packHsl, { widgetModelView } = 
       }
       // The overlay is the page's, not the scene's: it goes when the scene does.
       dispose(...rest) {
-        syncStrangle(null, 0);
+        disposeStrangle();
         removeHulls();
         return super.dispose?.(...rest);
       }
@@ -49,6 +51,7 @@ export const vardorvisPresentation = (BaseScene, packHsl, { widgetModelView } = 
     setStrangleTools({ widgetModelView, playSound: (soundId) => context?.eventAudioPlayer?.engine?.play(soundId, { channel: "sfx" }, "vardorvis-strangle") });
     return buildScene(VardorvisScene, renderConfig, context);
   },
+  audio: vardorvisAudio,
   defaultCamera: { yaw: 180, pitch: -45, zoom: 320 },
   presentation: {
     title: "Vardorvis",
@@ -59,3 +62,5 @@ export const vardorvisPresentation = (BaseScene, packHsl, { widgetModelView } = 
     portrait: { npcTypeId: ids.boss, framing: { yaw: -30, pitch: -12, focusHeight: 0.6, span: 0.7 } },
   },
 });
+// How presentations.js finds it.
+export { vardorvisPresentation as presentation };

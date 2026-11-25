@@ -35,13 +35,15 @@ try {
   assert.equal(new URL(page.url()).pathname, "/vardorvis/");
   await page.waitForFunction(() => scene.isTerrainLoaded() && scene.isPlayerLoaded() && scene.isNpcLoaded() && scene.npcInstanceManager.instanceRegistry.size > 0, null, { timeout: 60000 });
 
-  // Ticked to his first tendrils, axes and head: every one is drawn.
+  // Ticked to his first tendrils, axes and head: every one is drawn. A head comes
+  // with an axe cycle only two times in three, so he is kept at his hitpoints
+  // while the test waits for one: the player's hits could kill him first.
   const specials = await page.evaluate(() => {
     engine.setMechanicsConfig({ ...engine.mechanicsConfig, infiniteHealth: true });
-    engine.setBossHp(200); // enraged: a head with every axe cycle
     engine.injectAction({ type: "attackTarget", targetId: "vardorvis" });
     const seen = new Set();
-    for (let tick = 0; tick < 120 && !(seen.has("axe") && seen.has("head") && seen.has("tendril")); tick++) {
+    for (let tick = 0; tick < 400 && !(seen.has("axe") && seen.has("head") && seen.has("tendril")); tick++) {
+      engine.setBossHp(200); // enraged
       engine.advanceTick(engine.player().position);
       for (const id of engine.worldState.actors.keys()) if (id.startsWith("vardorvis-")) seen.add(id.split("-")[1]);
     }

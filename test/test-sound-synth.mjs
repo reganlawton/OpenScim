@@ -35,11 +35,12 @@ import test from "node:test";
 import JSZip from "jszip";
 import { chromium } from "playwright-core";
 import { unpack, unzipCache } from "../tools/assets/cache.mjs";
+import { readCacheGroups } from "../tools/assets/cache-groups.mjs";
 import { SAMPLE_RATE, soundEffectWav, synthesizeSoundEffect } from "../client/audio/soundEffects.js";
 
 const repo = path.resolve(import.meta.dirname, "..");
 const cache = await unzipCache(fs.readFileSync(path.join(repo, "client/osrs-cache/disk.zip")));
-const ids = JSON.parse(fs.readFileSync(path.join(repo, "tools/assets/cache-groups.json"), "utf8"))[4];
+const ids = readCacheGroups()[4];
 const effect = async (id) => unpack(await cache.group(4, id));
 
 const stepperTest = "if (max >= ticks) {";
@@ -49,12 +50,23 @@ const originalSiteConverter = (
   await import("data:text/javascript;base64," + Buffer.from(source.replace(stepperTest, "if (max > ticks) {")).toString("base64"))
 ).synthesizeSoundEffect;
 
+// The loudest sample of an effect is at least 12 of 128, except where the
+// effect itself asks for less. CACHE, 10352: one noise oscillator at volume 10
+// of 100 under an envelope that peaks at 7638 of 65535, which is 381 of 32768;
+// its filter (one zero pair, magnitude 0.53) raises that to 891 at most, and
+// 891 is 4 of 128. CACHE, 3052 (a bubble of 0.1 seconds): one sine oscillator at
+// volume 20 of 100 under an envelope that peaks at 35914 of 65535, which is 3590
+// of 32768; its volume is modulated by a noise that does not move on in that
+// time and halves it, and the filter leaves 1486 of that, which is 5 of 128.
+const AUDIBLE = 12;
+const faint = new Map([[10352, 4], [3052, 5]]);
+
 test("every sound effect in the trimmed cache synthesizes to audible PCM", async () => {
   assert.equal(SAMPLE_RATE, 22050);
   for (const id of ids) {
     const pcm = synthesizeSoundEffect(await effect(id));
     assert.ok(pcm.length >= 1000 && pcm.length <= 10 * SAMPLE_RATE, id + ": " + pcm.length + " samples");
-    assert.ok(pcm.some((sample) => Math.abs(sample) >= 12), id + " is silent");
+    assert.ok(pcm.some((sample) => Math.abs(sample) >= (faint.get(id) ?? AUDIBLE)), id + " is silent");
   }
   // Requested by the simulator but never among the old files.
   for (const id of [8143, 8248]) {

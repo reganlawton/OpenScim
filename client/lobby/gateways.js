@@ -1,8 +1,9 @@
 // The lobby's gateways together: what the lobby asks of one, it asks of all.
 import * as toa from "../toa/gateway.js";
 import * as dt2 from "../dt2/gateway.js";
+import * as sandbox from "../encounters/sandbox/gateway.js";
 
-const gateways = { toa, dt2 };
+const gateways = { toa, dt2, sandbox };
 const all = Object.values(gateways);
 
 // Tiles that open something when clicked: { position, displayName } with

@@ -536,3 +536,6 @@ export const doomDefinition = {
 // The deep room's descriptor: the same encounter on another map square
 // (registry.js, variantDescriptors).
 doomDefinition.variantDescriptors = { [doomDeepKind]: { ...doomDefinition.descriptor, mapSquare: doomDeepMapSquare } };
+// How the registry finds it (encounters/registry.js), and where it stands in the encounter picker.
+export { doomDefinition as definition };
+export const order = 20;

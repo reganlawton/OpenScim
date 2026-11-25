@@ -9,7 +9,11 @@
 // The scene draws an NPC's `outline` on its true tile; the tile markers it
 // draws when it is handed them; the hull is drawn here, on a canvas of its
 // own over the game view, from the head's model as the scene projects it.
+// RuneLite draws it above the scene and under the game's interfaces: the
+// canvas is a layer of the view (shared/viewLayer.js), under the side panel
+// and under the strangle's overlay (strangle.js).
 import { packHsl } from "../../util/packHsl.js";
+import { gameView, mountOnView, viewPageScale } from "../shared/viewLayer.js";
 
 const highlight = { color: "#00FFFF", fillOpacity: 0x14 / 0xff, outlineWidth: 2 };
 const trueTileNpcTypeIds = new Set([12225, 12227]);
@@ -58,34 +62,37 @@ export function withHighlights(input) {
 }
 
 let hullCanvas = null;
+const hullZIndex = 1; // over the view's canvas, under the strangle's overlay (2)
 
 /** Draws the hull of every head on its canvas over the view; `scene` has drawn the frame with `camera`. */
 export function drawHulls(scene, camera, npcs) {
-  const viewport = document.querySelector(".scene-viewport");
+  const viewport = gameView();
   const heads = (npcs ?? []).filter((npc) => npc.alive && hullNpcTypeIds.has(npc.npcTypeId));
   if (!viewport || !camera?.Hb || heads.length === 0) {
     if (hullCanvas) hullCanvas.style.display = "none";
     return;
   }
-  const rect = viewport.getBoundingClientRect();
   if (!hullCanvas) {
     hullCanvas = document.createElement("canvas");
-    hullCanvas.style.cssText = "position:fixed;pointer-events:none;z-index:4;";
-    document.body.append(hullCanvas);
+    hullCanvas.style.pointerEvents = "none";
   }
-  const dpr = window.devicePixelRatio || 1;
-  Object.assign(hullCanvas.style, { display: "block", left: rect.left + "px", top: rect.top + "px", width: rect.width + "px", height: rect.height + "px" });
-  if (hullCanvas.width !== Math.round(rect.width * dpr)) hullCanvas.width = Math.round(rect.width * dpr);
-  if (hullCanvas.height !== Math.round(rect.height * dpr)) hullCanvas.height = Math.round(rect.height * dpr);
+  // Again each frame: the application may have made the view anew.
+  mountOnView(hullCanvas, hullZIndex);
+  // In the view's own pixels; its canvas's are as many as it covers on the screen.
+  const width = viewport.clientWidth, height = viewport.clientHeight;
+  const dpr = (window.devicePixelRatio || 1) * viewPageScale(viewport).x;
+  Object.assign(hullCanvas.style, { display: "block", width: width + "px", height: height + "px" });
+  if (hullCanvas.width !== Math.round(width * dpr)) hullCanvas.width = Math.round(width * dpr);
+  if (hullCanvas.height !== Math.round(height * dpr)) hullCanvas.height = Math.round(height * dpr);
   const context = hullCanvas.getContext("2d");
   context.setTransform(dpr, 0, 0, dpr, 0, 0);
-  context.clearRect(0, 0, rect.width, rect.height);
+  context.clearRect(0, 0, width, height);
   const view = camera.Hb(), projection = camera.jb();
   const byInstance = new Map(scene.getAllNpcHitTestData().map((entry) => [entry.actorId, entry.hitTestData]));
   for (const head of heads) {
     const data = byInstance.get(scene.getNpcRenderInstanceId(head.id)) ?? byInstance.get(head.id);
     if (!data) continue;
-    const points = projectVertices(data, view, projection, rect.width, rect.height);
+    const points = projectVertices(data, view, projection, width, height);
     const hull = convexHull(points);
     if (hull.length < 3) continue;
     context.beginPath();

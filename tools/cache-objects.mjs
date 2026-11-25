@@ -2,30 +2,44 @@
 // Looks up map objects, NPCs and spot animations in the full OpenRS2 cache
 // that `npm run assets` keeps in .cache/assets. Used to find the objects of a
 // room and the cache groups the trimmed cache needs for a map square, an
-// object, an NPC, an animation or a spot animation
-// (tools/assets/cache-groups.json).
+// object, an NPC, an animation or a spot animation (the lists of
+// tools/assets/cache-groups.mjs).
 //
 //   node tools/cache-objects.mjs map 14160              objects of a map square, with a floor plan (region = x << 8 | y)
 //   node tools/cache-objects.mjs info 46150 46172       object definitions, by id range
 //   node tools/cache-objects.mjs info name:brazier      ... by name (regular expression)
 //   node tools/cache-objects.mjs info model:45369       ... by model id
 //   node tools/cache-objects.mjs where 46743 47991      map squares that place these objects
-//   node tools/cache-objects.mjs deps 14160 loc:46168   groups these map squares and objects need that the list lacks
-//   node tools/cache-objects.mjs deps --add 14160       ... and add them to the list; then run: npm run assets -- --force
+//   node tools/cache-objects.mjs deps 14160 loc:46168   groups these map squares and objects need that the lists lack
+//   node tools/cache-objects.mjs deps --add --to duke-sucellus 14160
+//                                                       ... and add them to that encounter's list, the file
+//                                                       tools/assets/cache-groups/duke-sucellus.json, which is made if it
+//                                                       is not there; then run: npm run assets -- --force. With --to, a
+//                                                       group counts as listed when the base list or that file has it
 //   node tools/cache-objects.mjs deps npc:12811 seq:10859 spot:1459
 //                                                       ... the same for an NPC (its models, the animations it stands, walks and
 //                                                       runs with, the NPCs it can turn into), an animation and a spot
 //                                                       animation (its model and animation). For these three the sounds of the
 //                                                       animations' frames are needed too
+//   node tools/cache-objects.mjs deps --add --to duke-sucellus sound:3052 group:7:41097
+//                                                       ... a sound that an audio rule plays (it is in no definition), and
+//                                                       a group by index and id, as the browser's console names a missing
+//                                                       one ("Empty container 7:41097")
 //   node tools/cache-objects.mjs npc 12811 12817         NPC definitions: name, size, models, animations
 //   node tools/cache-objects.mjs spot 1459               spot animation definitions: model, animation
 import fs from "node:fs/promises";
 import path from "node:path";
 import { unpack, unzipCache } from "./assets/cache.mjs";
+import { baseFile, formatGroups, groupsDirectory, groupsName, mergeGroups, readGroupFiles } from "./assets/cache-groups.mjs";
 
 const repo = path.resolve(import.meta.dirname, "..");
-const listFile = path.join(repo, "tools/assets/cache-groups.json");
 const [command, ...args] = process.argv.slice(2);
+// `deps --add` writes the list of one encounter, the one `--to` names; never the base list, which every encounter shares.
+const to = args.includes("--to") ? (args[args.indexOf("--to") + 1] ?? "") : undefined;
+if (command === "deps" && (to === undefined ? args.includes("--add") : !groupsName.test(to))) {
+  console.error('deps --add needs the encounter whose list it writes: --to <name> (lower case letters, digits, "-"), for tools/assets/cache-groups/<name>.json');
+  process.exit(1);
+}
 const cache = await unzipCache(await fs.readFile(path.join(repo, ".cache/assets/openrs2-2762-disk.zip")));
 
 class Reader {
@@ -336,8 +350,14 @@ if (command === "info") {
   const soundSeqs = new Set();
   const npcs = [];
   const addSeq = (seq) => { if (seq >= 0) { seqs.add(seq); soundSeqs.add(seq); } };
-  for (const arg of args.filter((a) => a !== "--add")) {
-    if (arg.startsWith("loc:")) ids.add(Number(arg.slice(4)));
+  for (const arg of args.filter((a, index) => a !== "--add" && a !== "--to" && args[index - 1] !== "--to")) {
+    if (arg.startsWith("sound:") || arg.startsWith("group:")) {
+      // Named outright: checked here, since nothing below reads it.
+      const pair = arg.startsWith("sound:") ? "4/" + arg.slice(6) : arg.slice(6).replace(":", "/");
+      if (!/^\d+\/\d+$/.test(pair) || !(await cache.group(...pair.split("/").map(Number)))) throw new Error("the cache has no group for " + arg);
+      need.add(pair);
+    }
+    else if (arg.startsWith("loc:")) ids.add(Number(arg.slice(4)));
     else if (arg.startsWith("npc:")) npcs.push(Number(arg.slice(4)));
     else if (arg.startsWith("seq:")) addSeq(Number(arg.slice(4)));
     else if (arg.startsWith("spot:")) {
@@ -385,19 +405,23 @@ if (command === "info") {
       if (file) need.add("1/" + file.readUInt16BE(1));
     }
   }
-  const listed = JSON.parse(await fs.readFile(listFile, "utf8"));
+  // With --to, what the base list and that encounter's own lack: what another encounter lists does not count, so that
+  // each list is whole without the others. Without it, what no list has.
+  const ownFile = to === undefined ? null : path.join(groupsDirectory, to + ".json");
+  const lists = readGroupFiles();
+  const listed = mergeGroups(lists.filter(({ file }) => !ownFile || file === baseFile || file === ownFile).map(({ groups }) => groups));
   const missing = [...need].map((pair) => pair.split("/").map(Number)).filter(([archive, group]) => !listed[archive]?.includes(group));
   let bytes = 0;
   for (const [archive, group] of missing) bytes += (await cache.group(archive, group))?.length ?? 0;
-  console.log(need.size + " groups needed, " + missing.length + " not in the list (" + bytes + " bytes): " + missing.map((pair) => pair.join("/")).join(" "));
+  console.log(need.size + " groups needed, " + missing.length + " not in " + (ownFile ? "the base list or that of " + to : "any list") + " (" + bytes + " bytes): " + missing.map((pair) => pair.join("/")).join(" "));
   if (add && missing.length) {
-    for (const [archive, group] of missing) (listed[archive] ??= []).push(group);
-    const text = Object.keys(listed).sort((a, b) => a - b)
-      .map((archive) => JSON.stringify(archive) + ":" + JSON.stringify(listed[archive].sort((a, b) => a - b)));
-    await fs.writeFile(listFile, "{\n" + text.join(",\n") + "\n}\n");
-    console.log("added to tools/assets/cache-groups.json; rebuild with: npm run assets -- --force");
+    const own = lists.find(({ file }) => file === ownFile)?.groups ?? {};
+    for (const [archive, group] of missing) (own[archive] ??= []).push(group);
+    await fs.mkdir(groupsDirectory, { recursive: true });
+    await fs.writeFile(ownFile, formatGroups(own));
+    console.log("added to tools/assets/cache-groups/" + to + ".json; rebuild with: npm run assets -- --force");
   }
 } else {
-  console.log("usage: node tools/cache-objects.mjs map <region>... | info <id> [to] | info name:<regex> | info model:<id,...> | where <id>... | deps [--add] <region | loc:id | npc:id | seq:id | spot:id>... | npc <id>... | spot <id>...");
+  console.log("usage: node tools/cache-objects.mjs map <region>... | info <id> [to] | info name:<regex> | info model:<id,...> | where <id>... | deps [--add --to <name>] <region | loc:id | npc:id | seq:id | spot:id | sound:id | group:index:id>... | npc <id>... | spot <id>...");
   process.exitCode = 1;
 }

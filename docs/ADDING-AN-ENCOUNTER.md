@@ -1,15 +1,17 @@
 # Adding an encounter
 
 An encounter is a fight: its rules, what is known of it before a fight
-exists, and what draws it. You add one as files of its own and three lines
-in three modules. No file under `client/assets/` (the bundles) has to be
-edited, and you do not have to read one.
+exists, and what draws it. You add one as files of its own: a directory
+under `client/encounters/` registers itself, and there is no list to add a
+line to. No file under `client/assets/` (the bundles) has to be edited, and
+you do not have to read one.
 
 The worked example is the fixture encounter of the tests,
 `test/fixtures/training-ground/`: one monster that walks up to the player
 and hits, a toggle, a debug action. It is 220 lines in two files. The tests
-register it while they run (`test/fixtures/register.mjs` holds the three
-lines); the site does not have it. The code quoted below is the fixture's,
+register it while they run (`test/fixtures/register.mjs` says how: it is
+outside `client/`, where an encounter is found by itself); the site does
+not have it. The code quoted below is the fixture's,
 except where the text calls it a sketch. The import lines are shown as you
 would write them for an encounter in `client/encounters/`.
 
@@ -49,6 +51,11 @@ A new directory `client/encounters/<name>/` with two modules:
 - `encounter.js`: the encounter class and its definition (section 2 and 3);
 - `presentation.js`: what draws it (section 5).
 
+The two names are fixed: `client/encounters/registry.js` takes every
+`encounter.js` of a directory beside it, and `presentations.js` every
+`presentation.js`. That is the whole registration. Two pull requests that
+each add a fight touch no file in common.
+
 More modules as the fight grows (the original encounters have fourteen to
 twenty-four each). Import the engine's rules and the shared helpers
 relatively (`../../engine/monsterStats.js`, `../shared/npcAttack.js`). The
@@ -59,8 +66,8 @@ Two rules hold for every module under `client/encounters/`, and
 `node tools/check-import-graph.mjs` fails when one is broken:
 
 - no import of `client/assets/rendering.js`, `Grid.js` or `application.js`;
-- no import cycle. The two lists you add a line to import your modules, so
-  your modules must not import `registry.js` or `presentations.js` back.
+- no import cycle. `registry.js` and `presentations.js` import your
+  modules, so your modules must not import either of them back.
 
 What you may import: `client/engine/`, `client/data/`, `client/util/`,
 `client/encounters/shared/` (the default scene builder is there, section
@@ -84,7 +91,7 @@ lacks one throws when the engine gets there.
 
 | Member | The fixture's | What it is for |
 |---|---|---|
-| `kind` | `"training_ground"` | the encounter's name; the same string as in the three lists |
+| `kind` | `"training_ground"` | the encounter's name; the same string as in the two lists |
 | `reset(seeds?)` | draws a seed, makes its random generator, sets the outcome to active | a new run. `seeds` is what `getSeeds()` returned when a run is repeated (a restart with the same seeds, a replay). Call it from the constructor |
 | `getSeeds()` | `{ encounterSeed }` | everything random in the fight must follow from these, so that a replay repeats it |
 | `getDefaultMechanicsConfig()` | `{ trainingGroundHardHits: false }` | the encounter's own settings and their defaults; the player's settings are laid over them |
@@ -283,10 +290,11 @@ drawing a seed in `reset`.
 
 ## 3. The definition
 
-What is registered for a kind. Export it from `encounter.js`:
+What is registered for a kind. Export it from `encounter.js` as
+`definition`:
 
 ```js
-export const trainingGroundDefinition = {
+export const definition = {
   kind: trainingGroundKind,
   factory: () => new TrainingGroundEncounter(),
   descriptor: {
@@ -308,21 +316,23 @@ export const trainingGroundDefinition = {
 };
 ```
 
-and add it to the list in `client/encounters/registry.js`, with its import:
+The registry finds it there. A module with several kinds of its own exports
+`definitions`, a list, instead (`client/encounters/tombs-of-amascut/`).
+
+The encounter picker shows the encounters in the order of the registry's
+list. To choose your place in it, export a number:
 
 ```js
-import { trainingGroundDefinition } from "./training-ground/encounter.js";
-...
-var registeredEncounterDefinitions = [
-  trainingGroundDefinition,
-  ...
+export const order = 80;
 ```
 
+Lower is earlier. Those that ship have 10 to 70, and the Inferno 100, so 80
+stands just before the Inferno; two encounters with the same number go by
+the name of their directory. Without an `order` yours comes after all that
+have one.
+
 The header of `registry.js` describes every key of a definition, the
-optional ones included (`enableIntro`, variants, retired names). The
-definition can stand anywhere in the list; the order of the list is the
-order of the encounter picker. (The fixture's line goes to the front only
-because that is the simplest place for a test to put it.)
+optional ones included (`slug`, `enableIntro`, variants, retired names).
 
 **`factory(options)`** returns a new encounter object.
 
@@ -340,7 +350,10 @@ fight exists. The engine reads none of it.
 | `mapSquareOffsets` | no | further map squares around the first (the Inferno's arena spans five) |
 | `victory` | no | `{ title, narrative, accent, eyebrow? }`: the text of the victory screen; `accent` is `"gold"` or `"blood"`. Without it a won fight shows no victory screen |
 | `isWorkInProgress` | no | a "Beta" badge in the menus |
-| `variants`, `variantLabel`, `modifiers`, `setupNotes` | no | Yama's contracts and Sol Heredit's modifiers; see their definitions in `registry.js` |
+| `variants`, `variantLabel`, `modifiers`, `setupNotes` | no | Yama's contracts and Sol Heredit's modifiers; see their definitions |
+| `loadouts` | no | the default loadouts, by a key of your choosing: `{ max: { name: "Max (Scythe)", equipment: { head: 30750, weapon: 22325 }, inventory: [13652, 23685, null, 3024], supplies: { ... } } }`. `equipment` is item ids by slot (`head`, `cape`, `amulet`, `weapon`, `body`, `shield`, `legs`, `hands`, `boots`, `ring`), `inventory` up to 28 item ids with `null` for an empty slot, `supplies` the ammunition, rune pouch, blowpipe, spell and spellbook as `parseCombatSupplies` of `client/engine/supplies.js` reads them (rune ids are `RUNE_ITEM_IDS` of `client/engine/spells.js`). The first is what a player starts with; "No Equipment" is added. Without `loadouts` the player starts with nothing worn. When they grow, keep them in a `loadouts.js` beside the encounter |
+| `seo` | no | the route's texts for search engines: `{ title, description, h1?, intro?, keywords?, noindex? }`. With it the encounter is listed on the home page and its route indexed, unless it says `noindex: true`. Without it the page's title and description are the display name and the description, and the route is not indexed |
+| `tileMarkerPresets` | no | tile markers the player can switch on: `[{ id, name, description, link?, defaultActive?, markers: [[x, y, "#AARRGGBB", label?], ...] }]`. `id` is unique among all encounters; a marker's colour is RuneLite's, alpha first, as its ground marker plugin exports it |
 
 **`controls`** is what the menus offer:
 
@@ -365,22 +378,20 @@ fight exists. The engine reads none of it.
 
 ## 4. The kind and the route
 
-Add an entry to `encounterDefinitions` in `client/engine/encounterKinds.js`:
+There is nothing to write. The engine's table of kinds
+(`client/engine/encounterKinds.js`) is read off the registry: a kind with a
+definition has a route, and its variant kinds are the keys of the
+definition's `variantFactories`.
 
-```js
-  { kind: "training_ground", variantKinds: [], slug: "training-ground", registered: true },
-```
-
-`slug` is the address (`/training-ground/`); `null` for none. `registered:
-true` says that the kind has a definition; the flag is written by hand, and
-a kind with `registered: false` gets no route (the Desert Treasure II kinds
-in that table are waiting for their fights this way). `variantKinds` lists
-further kinds that are variants of this one.
+The **slug**, the address of the route, is the kind with `-` for `_`:
+`training_ground` is at `/training-ground/`. A definition that wants another
+says so (`slug: "yama"` for the kind `yama_p3`), and `slug: null` is an
+encounter without a route (the lobby).
 
 That is all a route needs. The page's title is the descriptor's display
 name ("Training Ground | OpenScim.dev"), its description the descriptor's, and
 the page asks search engines not to index it. Texts written for search
-engines are an entry in a table of `application.js`: see section 9.
+engines are the descriptor's `seo` (section 3).
 
 Once a kind is in the registry it is offered in the encounter picker and
 the quick search, under its display name.
@@ -401,7 +412,7 @@ const renderConfig = {
   preloadNpcTypes: [{ npcTypeId: partnerNpcTypeId, idleSeqId: 7595, attackClips: { attack: 7597 }, deathSeqId: 7599 }],
 };
 
-export const trainingGroundPresentation = (BaseScene) => ({
+export const presentation = (BaseScene) => ({
   kind: trainingGroundKind,
   renderConfig,
   sceneBuilder: (context) => buildScene(BaseScene, renderConfig, context),
@@ -409,20 +420,16 @@ export const trainingGroundPresentation = (BaseScene) => ({
 });
 ```
 
-Add the function to the list in `client/encounters/presentations.js`, with
-its import:
+Export it from `presentation.js` as `presentation`: `presentations.js`
+finds it there. An encounter with several exports `presentations`, a list
+(the Doom's two rooms).
 
-```js
-import { trainingGroundPresentation } from "./training-ground/presentation.js";
-...
-export const presentationBuilders = [zebakPresentation, nexusPresentation, trainingGroundPresentation];
-```
-
-`rendering.js` calls every function of the list once, with the base scene
-class and the renderer's colour packing (`packHsl`, also importable from
-`client/util/packHsl.js`). A kind without a presentation cannot be entered:
-the interface throws "No scene builder registered for encounter kind". Put
-yours at the end of the list: its order is the order of the audio layers.
+`rendering.js` calls every function that was found once, with the base
+scene class and the renderer's colour packing (`packHsl`, also importable
+from `client/util/packHsl.js`). A kind without a presentation cannot be
+entered: the interface throws "No scene builder registered for encounter
+kind". The presentations are in the order of the encounters (`order`,
+section 3), which is also the order of the audio layers.
 
 The keys of what the function returns (the header of `presentations.js`
 has them too):
@@ -608,24 +615,33 @@ Colosseum's waves do (`client/encounters/colosseum/`):
 The client runs on a trimmed copy of the game cache (`client/osrs-cache/`,
 made by `npm run assets`). It holds what the existing encounters need. Your
 map square, your NPCs' models and animations, your spot animations and
-sounds must be in it:
+sounds must be in it. What yours adds is listed in a file of its own,
+`tools/assets/cache-groups/<name>.json` (`<name>` as your directory:
+lower case, digits, `-`), which the command below writes. Nobody edits the
+list the existing encounters share, `tools/assets/cache-groups.json`, so two
+encounters being added never meet in a file; the trimmed cache holds what
+any of the lists has (`tools/assets/cache-groups.mjs`).
 
 - `node tools/cache-objects.mjs deps <region>` lists the cache groups a map
-  square and its objects need that the trimmed cache lacks; `--add` puts
-  them into `tools/assets/cache-groups.json`. The region of a map square is
+  square and its objects need that no list has; `deps --add --to <name>
+  <region>` puts them into your file. The region of a map square is
   `x << 8 | y`. Then `npm run assets -- --force` rebuilds the cache.
-- `node tools/cache-objects.mjs deps npc:<id> seq:<id> spot:<id>` does the
-  same for an NPC type (its models, the sequences it stands, walks and runs
-  with), a sequence and a spot animation, each with the sounds of its
-  frames. Name every sequence your render config names: an attack or a
-  death is not in the NPC's own definition.
+- `node tools/cache-objects.mjs deps --add --to <name> npc:<id> seq:<id>
+  spot:<id>` does the same for an NPC type (its models, the sequences it
+  stands, walks and runs with), a sequence and a spot animation, each with
+  the sounds of its frames. Name every sequence your render config names:
+  an attack or a death is not in the NPC's own definition.
 - The cache loader throws `Empty container <index>:<group>` for a model or
   an animation that is still missing: the browser's console names the
-  index and the group to add to `cache-groups.json`. A missing sound throws
-  nothing: it is silent. `deps` finds the sounds of an animation's frames
-  only: a sound an `audio` rule plays is in no definition, and its id goes
-  under `"4"` in `cache-groups.json` by hand (`test/test-colosseum-audio.mjs`
-  checks the Colosseum's).
+  index and the group, and `deps --add --to <name> group:<index>:<group>`
+  adds it. A missing sound throws nothing: it is silent. `deps` finds the
+  sounds of an animation's frames only: a sound an `audio` rule plays is in
+  no definition, and `deps --add --to <name> sound:<id>` adds it
+  (`test/test-colosseum-audio.mjs` checks the Colosseum's).
+- With `--to`, a group counts as listed when the shared list or your file
+  has it, whatever other encounters' files hold: yours stays whole when
+  theirs change. `node test/test-cache-groups.mjs` checks every file and
+  needs no cache.
 
 `node tools/cache-objects.mjs npc <id>...` and `spot <id>...` print a
 definition from the full cache: an NPC's name, size, models and its own
@@ -678,8 +694,10 @@ same is open to you:
 
 1. **A fight without a browser.** The determinism harness runs scripted
    fights in Node and digests the engine's state at every tick. Add a file
-   `tools/determinism/scenarios/<name>.mjs` that exports `scenarios`, and
-   its name to `scenarioFiles` in `tools/determinism/harness.mjs`. The
+   `tools/determinism/scenarios/<name>.mjs` that exports `scenarios`: the
+   harness runs every file of that directory, and there is no list to add
+   it to. Its digests are recorded as files of their own,
+   `test/determinism-digests/<scenario name>.json`. The
    fixture's file, `scenarios/fixture.mjs`, is two fights in forty lines;
    the top of `scenarios/common.mjs` says what a scenario holds, and the
    file has the gear and the inputs a script can give.
@@ -717,9 +735,8 @@ same is open to you:
      that is dying has a `death` record before it stops being `alive`.
 
    The harness reaches an encounter through the registry alone. It runs a
-   fight whose kind is missing from `encounterKinds.js` or whose
-   presentation is missing from `presentations.js`: those two lines are
-   only proved in the browser.
+   fight that has no `presentation.js`, or one that exports nothing under
+   the name `presentation`: that is only proved in the browser.
 2. `node tools/check-import-graph.mjs`: your modules import no bundle and
    are in no import cycle (section 1).
 3. **The route in a browser.** `npm run dev`, then
@@ -735,6 +752,11 @@ same is open to you:
 Without touching a bundle, an encounter gets:
 
 - the route, the encounter picker and the quick search (sections 3 and 4);
+- its default loadouts, its texts for search engines and its tile-marker
+  presets, from the descriptor's `loadouts`, `seo` and `tileMarkerPresets`
+  (section 3);
+- an entry in the What's New window: a file of its own in
+  `client/whats-new/`, as `2026-11-24-colosseum.js` there;
 - the arena from the map, the terrain, the map's objects (section 3);
 - clicks on the ground and on its NPCs: walking and attacking. An NPC the
   player must not attack is refused in the rule `validateAttack` of
@@ -760,10 +782,8 @@ What still needs an edit in a bundle, each with its reason:
 |---|---|---|
 | A click that means something other than "attack" or "walk here" (Zebak's jugs: push, pull) | `Grid.js`, the click handlers and the context menu | what a click on an NPC means is decided there, by actor id |
 | A replay that contains one of your debug actions | `Grid.js`, the replay's schema | it lists the commands of each encounter by name; a command it does not know runs live, is recorded, and makes the replay invalid when it is loaded |
-| Default loadouts | `application.js`, the table of presets by kind | without an entry the player starts with nothing worn and an empty inventory, and the loadout editor offers only the player's own presets |
-| Texts for search engines, and being listed on the home page | `application.js`, the table of route metadata | the fallback of section 4 is deliberately `noindex` |
 | An NPC in the lobby that leads to the encounter | `rendering.js`, the lobby's tables | which lobby NPC and which tile enter which kind is written there. A gateway is modules, not a bundle: `client/lobby/gateways.js` lists them, one module each (`client/toa/gateway.js`, `client/dt2/gateway.js`) |
-| A set-up panel of the encounter's own or a "retry" button (the Inferno has both), tile-marker presets, tutorials, plugins scoped to an encounter | `Grid.js`, `application.js` | each is a table or a component keyed by kind |
+| A set-up panel of the encounter's own or a "retry" button (the Inferno has both), tutorials, plugins scoped to an encounter | `Grid.js`, `application.js` | each is a table or a component keyed by kind |
 | A scene that is not built on the Inferno's (Yama's and Sol Heredit's extend the compositor directly) | `rendering.js` | a presentation is handed one base class |
 | A method of the base scene that has no name yet | `rendering.js` | about a hundred are left; `tools/rename-members.mjs` renames one everywhere it is used, with a names file in `tools/names/` (`scene-members.json` is the example) |
 | A kind of visual event the scene does not know | `rendering.js` | a scene plays the event types its code was written for |
@@ -772,17 +792,25 @@ What still needs an edit in a bundle, each with its reason:
 
 ## Checklist
 
+Every step adds files of your own; none edits a list.
+
 1. `client/encounters/<name>/encounter.js`: the class with the thirteen
-   required members, the NPC definitions, the definition.
+   required members, the NPC definitions, and the definition, exported as
+   `definition`. Its kind gives the route; `order` its place in the picker.
 2. `client/encounters/<name>/presentation.js`: the render config and the
-   presentation function.
-3. `client/encounters/registry.js`: the definition in
-   `registeredEncounterDefinitions`.
-4. `client/engine/encounterKinds.js`: the kind, with its slug and
-   `registered: true`.
-5. `client/encounters/presentations.js`: the function in
-   `presentationBuilders`.
-6. `tools/determinism/scenarios/<name>.mjs`, its name in `scenarioFiles`,
-   its digests recorded.
-7. The harness, the import graph check, `npm test`, `npm run build`, the
+   presentation function, exported as `presentation`.
+3. `tools/determinism/scenarios/<name>.mjs`, its digests recorded
+   (`test/determinism-digests/<name>/`).
+4. The harness, the import graph check, `npm test`, `npm run build`, the
    route in a browser.
+5. The sandbox: `npm run sandbox:catalog` adds your monsters to its catalog
+   (`client/encounters/sandbox/discovered.js`); `node
+   test/test-sandbox-catalog.mjs` fights each, and `node
+   tools/determinism/harness.mjs --update --only sandbox/catalog/` records
+   their digests. A monster that is not one to place on its own goes to
+   `sandboxCatalogExclusions` in `client/encounters/sandbox/catalog.js`
+   with its reason (`docs/SANDBOX.md`, "New encounters' monsters").
+6. For a boss, its equipment and inventory setups, before it is pushed: the
+   descriptor's `loadouts` (section 3), from the Equipment section of its
+   wiki strategies page (`<boss>/Strategies`, as
+   https://oldschool.runescape.wiki/w/The_Leviathan/Strategies).

@@ -1,49 +1,33 @@
-import { zebakDefinition } from "/toa/zebak/native.js";
-import { nexusDefinition } from "/toa/nexus.js";
-import { doomDefinition } from "./doom-of-mokhaiotl/encounter.js";
-import { LobbyEncounter } from "./lobby/LobbyEncounter.js";
-import {
-  divineSeveranceContract,
-  forfeitBreathContract,
-  sensoryCloudingContract,
-  bloodiedBlowsContract,
-  glyphicAttenuationContract,
-  yamaContractVariants,
-} from "./yama/contracts.js";
-import { buildYamaControls } from "./yama/controls.js";
-import { YamaEncounter } from "./yama/YamaEncounter.js";
-import { solPlayerStart, solMapSquare } from "./sol-heredit/constants.js";
-import { buildSolHereditControls } from "./sol-heredit/controls.js";
-import { solHereditModifiers, solHereditSetupNotes, solHereditOptionsSchema } from "./sol-heredit/modifiers.js";
-import { SolHereditEncounter } from "./sol-heredit/SolHereditEncounter.js";
-import { infernoMapSquare, infernoMapSquareOffsets, infernoExcludedStaticLocIds, infernoPlayerStart } from "./inferno/constants.js";
-import { infernoPillarDynamicLocs } from "./inferno/pillars.js";
-import { infernoStartWaveKey, getInfernoSetup, buildInfernoControls } from "./inferno/controls.js";
-import { InfernoEncounter } from "./inferno/InfernoEncounter.js";
-import { getArenaWalkableTiles } from "../engine/arena.js";
-import { CollisionFlag, createCollisionMap } from "../engine/collision.js";
-import { createSeededRandom } from "../engine/random.js";
-import { startScriptedNpcDeath } from "../engine/npcState.js";
-import { rollNpcAttack } from "./shared/npcAttack.js";
-import { buildNpcProjectileVisual } from "./shared/npcHelpers.js";
-import { emitInfernoVisual, emitInfernoNpcAttack } from "./inferno/events.js";
-import { getMonsterFormulaStats } from "../engine/monsterStats.js";
-import { solBoundaryLocs } from "./sol-heredit/boundaryLocs.js";
-import { colosseumDefinition } from "./colosseum/ColosseumEncounter.js";
-import { vardorvisDefinition } from "./vardorvis/encounter.js";
-import { generalGraardorDefinition } from "./general-graardor/encounter.js";
+import { buildSandboxDefinition } from "./sandbox/encounter.js";
 // The encounters the client can run, and the registry the engine asks for
 // the encounter of a kind (engine/createSimulationEngine.js calls
 // encounterRegistry.create). This module imports no chunk.
 //
 // One definition per encounter. Its keys:
 //   kind               the name the encounter goes by ("yama_p3", "inferno")
+//   slug               optional: the address of its route, when that is not
+//                      the kind with "-" for "_" ("yama" for "yama_p3");
+//                      `null` for an encounter without a route (the lobby)
 //   factory(options)   makes the encounter object; `options` is what
 //                      encounterRegistry.create was given
 //   descriptor         what is known of the encounter before a fight exists:
 //                      display name, map square, the player's start tile,
 //                      how the arena's collision is built, variants or
 //                      modifiers, the victory text
+//                      Three optional fields of it are the menus' own,
+//                      read by assets/application.js, so that an encounter
+//                      needs no entry in a table of that chunk:
+//                        loadouts           { key: { name, equipment: { slot:
+//                                           item id }, inventory: [item id or
+//                                           null, ...], supplies? } }: the
+//                                           default loadouts, the first being
+//                                           the one a player starts with
+//                        seo                { title, description, h1?, intro?,
+//                                           keywords?, noindex? }: the route's
+//                                           texts for search engines
+//                        tileMarkerPresets  [{ id, name, description, link?,
+//                                           defaultActive?, markers: [[x, y,
+//                                           "#AARRGGBB", label?], ...] }]
 //   controls           what its menus offer: defaultMechanicsConfig,
 //                      mechanicsToggles, debugActions; some have more
 //   enableIntro        optional; isIntroEnabledForKind answers from it
@@ -56,13 +40,13 @@ import { generalGraardorDefinition } from "./general-graardor/encounter.js";
 //   retiredEntries     optional: names that are kinds no more, each with the
 //                      mechanics it stands for (resolveKindOrRetiredEntry)
 //   countdownMovement  optional; hasCountdownMovement answers from it
-// The first two definitions come from client/toa/; Zebak's is built from the
-// rules handed to it here.
+// A definition is written beside its encounter, in the encounter.js of its
+// directory, and found here: see the list below.
 //
-// engine/encounterKinds.js lists the kinds a second time, with their variant
-// kinds, route slugs and retired kinds, and four kinds that have no
-// definition here. The presentations (what draws an encounter) are a third
-// list: presentations.js beside this module has those that are written in
+// engine/encounterKinds.js reads its table of kinds (variant kinds, route
+// slugs, retired kinds) off this list: a kind is written here and nowhere
+// else. The presentations (what draws an encounter) are found the same way:
+// presentations.js beside this module has those that are written in
 // modules, the chunk rendering.js its own four.
 //
 // The engine reads no descriptor. The application does, in the hook that
@@ -76,157 +60,34 @@ import { generalGraardorDefinition } from "./general-graardor/encounter.js";
 // take it (reapplyArenaConfig). Until an arena is registered for the kind,
 // and always with "custom", the engine runs on the encounter's own
 // getArenaConfig().
-var registeredEncounterDefinitions = [
-  zebakDefinition({makeCollision:createCollisionMap,solidFlag:CollisionFlag.OBJECT,walkable:getArenaWalkableTiles,stats:getMonsterFormulaStats, seedRandom:createSeededRandom, rollAttack:rollNpcAttack, showAttack:emitInfernoNpcAttack, projectile:buildNpcProjectileVisual, animate:emitInfernoVisual, startNpcDeath:startScriptedNpcDeath}),
-  nexusDefinition,
-  doomDefinition,
-  {
-    kind: "yama_p3",
-    factory: () => new YamaEncounter(),
-    enableIntro: true,
-    descriptor: {
-      kind: "yama_p3",
-      displayName: "Yama - Phase 3",
-      description: "The Yama boss encounter",
-      mapSquare: {
-        x: 23,
-        y: 157,
-      },
-      playerStart: [31, 37],
-      loadsMapLocs: true,
-      variants: yamaContractVariants,
-      variantLabel: "Contract",
-      collision: {
-        mode: "auto",
-        seed: [32, 30],
-      },
-      victory: {
-        eyebrow: "Triumphant",
-        title: "VICTORY",
-        narrative: "YAMA DEFEATED",
-        accent: "blood",
-      },
-    },
-    variantFactories: {
-      yama_p3_divine: () => new YamaEncounter(divineSeveranceContract),
-      yama_p3_forfeit_breath: () => new YamaEncounter(forfeitBreathContract),
-      yama_p3_sensory: () => new YamaEncounter(sensoryCloudingContract),
-      yama_p3_bloodied: () => new YamaEncounter(bloodiedBlowsContract),
-      yama_p3_glyphic: () => new YamaEncounter(glyphicAttenuationContract),
-    },
-    controls: buildYamaControls(),
-    variantControls: {
-      yama_p3_divine: buildYamaControls(divineSeveranceContract),
-      yama_p3_forfeit_breath: buildYamaControls(forfeitBreathContract),
-      yama_p3_sensory: buildYamaControls(sensoryCloudingContract),
-      yama_p3_bloodied: buildYamaControls(bloodiedBlowsContract),
-      yama_p3_glyphic: buildYamaControls(glyphicAttenuationContract),
-    },
-  },
-  {
-    kind: "lobby",
-    factory: () => new LobbyEncounter(),
-    descriptor: {
-      kind: "lobby",
-      displayName: "Lobby",
-      description: "Prifddinas lobby area",
-      mapSquare: {
-        x: 25,
-        y: 73,
-      },
-      playerStart: [31, 25],
-      collision: {
-        mode: "custom",
-      },
-    },
-    controls: {
-      defaultMechanicsConfig: {
-        infiniteHealth: false,
-      },
-      mechanicsToggles: [],
-      debugActions: [],
-    },
-  },
-  {
-    kind: "sol_heredit",
-    factory: function (options) {
-      const parsedOptions = solHereditOptionsSchema.parse(options ?? {});
-      return new SolHereditEncounter(undefined, parsedOptions.modifiers);
-    },
-    descriptor: {
-      kind: "sol_heredit",
-      displayName: "Sol Heredit",
-      description: "The final wave of the Fortis Colosseum.",
-      mapSquare: solMapSquare,
-      playerStart: [...solPlayerStart],
-      modifiers: solHereditModifiers,
-      setupNotes: solHereditSetupNotes,
-      defaultModifierSelection: {
-        blasphemy: 3,
-      },
-      loadsMapLocs: true,
-      isWorkInProgress: true,
-      collision: {
-        mode: "auto",
-        seed: [...solPlayerStart],
-        dynamicLocs: solBoundaryLocs,
-      },
-      victory: {
-        eyebrow: "Triumphant",
-        title: "VICTORY",
-        narrative: "SOL HEREDIT DEFEATED",
-        accent: "gold",
-      },
-    },
-    controls: buildSolHereditControls(),
-  },
-  colosseumDefinition,
-  vardorvisDefinition,
-  generalGraardorDefinition,
-  {
-    kind: "inferno",
-    factory: function (options) {
-      const optionKeys = Object.keys(options ?? {});
-      if (optionKeys.length > 0) {
-        throw new TypeError(
-          `Encounter 'inferno' accepts no constructor options; got: ${optionKeys.join(", ")}`,
-        );
-      }
-      return new InfernoEncounter();
-    },
-    enableIntro: true,
-    descriptor: {
-      kind: "inferno",
-      displayName: "The Inferno",
-      description:
-        "Start from any wave. Each cleared wave leads straight into the next, through to TzKal-Zuk at wave 69.",
-      mapSquare: infernoMapSquare,
-      mapSquareOffsets: infernoMapSquareOffsets,
-      playerStart: [...infernoPlayerStart],
-      loadsMapLocs: true,
-      isWorkInProgress: true,
-      collision: {
-        mode: "auto",
-        seed: [...infernoPlayerStart],
-        dynamicLocs: infernoPillarDynamicLocs,
-        excludedStaticLocIds: infernoExcludedStaticLocIds,
-      },
-      victory: {
-        eyebrow: "Triumphant",
-        title: "VICTORY",
-        narrative: "TZKAL-ZUK DEFEATED",
-        accent: "gold",
-      },
-    },
-    controls: buildInfernoControls(),
-    retiredEntries: {
-      zuk: {
-        [infernoStartWaveKey]: "69",
-      },
-    },
-    countdownMovement: (mechanics) => getInfernoSetup(mechanics).startWave !== 69,
-  },
-];
+// An encounter registers itself: every ./<directory>/encounter.js beside this
+// module is found here, so a new encounter edits no list. (The call below is
+// Vite's glob import; tools/determinism/import-glob.mjs writes it out for
+// Node.) Such a module exports
+//   definition   its definition; or `definitions`, a list of them (the Tombs
+//                of Amascut have two)
+//   order        optional, a number: where it stands in this list, which is
+//                the order of the encounter picker. Lower is earlier; without
+//                one it comes after all that have one, and equal ones go by
+//                the name of the directory
+// The sandbox's encounter.js is found too and is no such module: it is left
+// out here and its definition added last, below.
+const foundModules = import.meta.glob("./*/encounter.js", { eager: true });
+const encounterModules = Object.entries(foundModules);
+const directoryOf = (path) => path.split("/")[1];
+const orderedModules = encounterModules
+  .filter(([path]) => directoryOf(path) !== "sandbox")
+  .sort(([pathA, a], [pathB, b]) => (a.order ?? Infinity) - (b.order ?? Infinity) || (pathA < pathB ? -1 : 1));
+// The encounters' directories in the order of the list: presentations.js puts what it finds in the same order.
+var encounterDirectories = orderedModules.map(([path]) => directoryOf(path));
+var registeredEncounterDefinitions = orderedModules.flatMap(([path, module]) => {
+  const definitions = module.definitions ?? (module.definition ? [module.definition] : undefined);
+  if (!definitions) throw new Error(`${path} exports neither \`definition\` nor \`definitions\``);
+  return definitions;
+});
+// The sandbox runs the other encounters as the hosts of its arenas: it is
+// handed their definitions.
+registeredEncounterDefinitions.push(buildSandboxDefinition([...registeredEncounterDefinitions]));
 function getDefinitionKinds(definition) {
   return [definition.kind, ...Object.keys(definition.variantFactories ?? {})];
 }
@@ -362,4 +223,4 @@ for (const definition of registeredEncounterDefinitions) {
 for (const definition of registeredEncounterDefinitions) {
   for (const [variantKind, descriptor] of Object.entries(definition.variantDescriptors ?? {})) variantDescriptors.set(variantKind, descriptor);
 }
-export { registeredEncounterDefinitions, getDefinitionKinds, controlsByKind, getEncounterControls, isIntroEnabledForKind, hasCountdownMovement, resolveKindOrRetiredEntry, encounterRegistry };
+export { registeredEncounterDefinitions, encounterDirectories, getDefinitionKinds, controlsByKind, getEncounterControls, isIntroEnabledForKind, hasCountdownMovement, resolveKindOrRetiredEntry, encounterRegistry };

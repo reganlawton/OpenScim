@@ -1,0 +1,68 @@
+# The checks that need no game data. A green run does not mean that every test
+# passed: the determinism harness needs client/osrs-cache/disk.zip, and npm test
+# a browser as well. Run those locally (CONTRIBUTING.md).
+#
+# Never run "npm run assets", upload an artifact or cache build output here:
+# game data belongs to Jagex Ltd and must not reach GitHub.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the marker check reads the files as they were before
+          persist-credentials: false
+
+      # Tracked files that .gitignore covers were force-added. The second list
+      # is of media and archives that .gitignore does not name.
+      - name: No game data is tracked
+        run: |
+          ignored=$(git -c core.ignorecase=true ls-files --cached --ignored --exclude-standard)
+          media=$(git ls-files -- ':(icase)*.zip' ':(icase)*.7z' ':(icase)*.rar' ':(icase)*.tar' ':(icase)*.gz' \
+            ':(icase)*.mp3' ':(icase)*.wav' ':(icase)*.mp4' ':(icase)*.webm' ':(icase)*.otf' ':(icase)*.woff*' \
+            ':(icase)*.dat2' ':(icase)*.idx*')
+          if [ -n "$ignored$media" ]; then
+            echo "::error::These tracked files look like game data, which must not be committed (CONTRIBUTING.md)."
+            printf '%s\n' "$ignored" "$media"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - run: npm ci
+
+      - name: Import graph
+        run: node tools/check-import-graph.mjs
+
+      # The lists of the trimmed cache's groups, one file per encounter: ids
+      # only, no game data.
+      - name: Cache group lists
+        run: node test/test-cache-groups.mjs
+
+      # Against HEAD, its default, the check compares a clean checkout with
+      # itself. A pull request is checked out merged: HEAD^1 is its base.
+      - name: Test markers
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || github.event.before }}
+        run: node tools/check-test-markers.mjs "$BASE"
+
+      - name: Build
+        run: npm run build

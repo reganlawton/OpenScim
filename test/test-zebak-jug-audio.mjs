@@ -54,7 +54,12 @@ try {
     });
   });
   assert.deepEqual(frameSounds, [[2192,9644,[]],[2193,659,[]],[2449,10221,[]],[95,660,[]]]);
+  // The click that lets the page play sound is a click on the ground too: the
+  // player walks. Were it to reach the engine on the tick of the first Hit, it
+  // would take the player off the jug, so the walk is let end first.
+  const tickBeforeClick = await page.evaluate(() => engine.worldState.tick);
   await page.mouse.click(640,425);
+  await page.waitForFunction(tick => engine.worldState.tick >= tick + 2 && !engine.player().isMoving, tickBeforeClick);
   for (const [weapon, expected] of [[20997,[2700]],[9185,[2695]],[27275,[6410,6412,1460]]]) {
     const id = await page.evaluate(weapon => {
       const player = engine.player();

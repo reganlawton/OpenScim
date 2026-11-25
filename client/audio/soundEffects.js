@@ -351,7 +351,8 @@ export function soundEffectWav(bytes) {
 
 // WAV for effect `id` from a loaded CacheManager, or null when the cache is
 // not loaded or does not hold that effect (the trimmed cache carries only the
-// ids listed under "4" in tools/assets/cache-groups.json).
+// ids listed under "4" in tools/assets/cache-groups.json and the files of
+// tools/assets/cache-groups/).
 function wavFromCache(cacheManager, id) {
   let file;
   try {

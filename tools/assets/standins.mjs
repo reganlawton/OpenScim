@@ -1,0 +1,159 @@
+// Stand-ins for the media files that have no upstream (manifest entries with
+// "source": null). They are not the originals: the originals were edited by
+// hand, or drawn for the old site, and exist only in backups. A stand-in is
+// made from what is public, so that the client shows something close instead
+// of a broken image. The fetcher writes one only where the file is absent,
+// and never over a file that is there (an original from a backup wins).
+//
+// A manifest entry names its recipe in "standIn":
+//   sprite:<a>/<g>/<f>[/canvas]   a cache sprite, as the "sprite" source writes
+//                                 it (the hitsplats, overheads and staff
+//                                 icons are recolours of these: ROADMAP)
+//   frames:<a>/<g>/<first>-<last>:<anim|sheet>[:<count>]
+//                                 sprite frames on their canvas, as an
+//                                 animated PNG or a horizontal sheet padded
+//                                 with empty frames to <count> (the click
+//                                 markers, sprite 299; the files keep their
+//                                 .webp names, browsers read the picture by
+//                                 its bytes)
+//   tint:<path>:<r>,<g>,<b>[:<dim>]  a file of this tree, every pixel's colour
+//                                 replaced by the given one at the pixel's
+//                                 own lightness (the health bars), or only
+//                                 darkened by <dim> when the colour is "-"
+//   mirror:<path>                 a file of this tree, flipped left to right
+//   from:<alias>:<rest>           a file of one of the manifest's sources
+//                                 (an item's icon from "items")
+//   solid:<w>x<h>:<rrggbb|transparent>  one colour (pictures and buttons
+//                                 nothing public stands in for)
+import fs from "node:fs/promises";
+import path from "node:path";
+import zlib from "node:zlib";
+import { decodePng, decodeSprites, encodePng, onCanvas } from "./sprites.mjs";
+import { unpack } from "./cache.mjs";
+
+function pngChunk(type, body) {
+  const out = Buffer.alloc(body.length + 12);
+  out.writeUInt32BE(body.length);
+  out.write(type, 4, "latin1");
+  body.copy(out, 8);
+  out.writeUInt32BE(zlib.crc32(out.subarray(4, out.length - 4)), out.length - 4);
+  return out;
+}
+const scanlines = ({ width, height, rgba }) => {
+  const rows = Buffer.alloc(height * (width * 4 + 1));
+  for (let y = 0; y < height; y++) rgba.copy(rows, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4);
+  return zlib.deflateSync(rows, { level: 9 });
+};
+
+// An animated PNG of equal frames, played once, `delayMs` each.
+export function encodeApng(frames, delayMs) {
+  const { width, height } = frames[0];
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width);
+  header.writeUInt32BE(height, 4);
+  header.set([8, 6, 0, 0, 0], 8);
+  const animation = Buffer.alloc(8);
+  animation.writeUInt32BE(frames.length);
+  animation.writeUInt32BE(1, 4); // plays once
+  const parts = [Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), pngChunk("IHDR", header), pngChunk("acTL", animation)];
+  let sequence = 0;
+  frames.forEach((frame, index) => {
+    const control = Buffer.alloc(26);
+    control.writeUInt32BE(sequence++);
+    control.writeUInt32BE(width, 4);
+    control.writeUInt32BE(height, 8);
+    control.writeUInt16BE(delayMs, 20);
+    control.writeUInt16BE(1000, 22);
+    control.set([1, 0], 24); // clear to transparent after each frame; draw over
+    parts.push(pngChunk("fcTL", control));
+    const data = scanlines(frame);
+    if (index === 0) parts.push(pngChunk("IDAT", data));
+    else {
+      const body = Buffer.alloc(data.length + 4);
+      body.writeUInt32BE(sequence++);
+      data.copy(body, 4);
+      parts.push(pngChunk("fdAT", body));
+    }
+  });
+  parts.push(pngChunk("IEND", Buffer.alloc(0)));
+  return Buffer.concat(parts);
+}
+
+const solid = (width, height, colour) => {
+  const rgba = Buffer.alloc(width * height * 4);
+  if (colour !== "transparent") {
+    const value = (parseInt(colour, 16) << 8) | 255;
+    for (let i = 0; i < width * height; i++) rgba.writeUInt32BE(value >>> 0, i * 4);
+  }
+  return { width, height, rgba };
+};
+
+// Every stand-in carries this text chunk, so that the fetcher tells it from
+// an original (or from a file of the tree that only differs).
+export const standInMark = "openscim-stand-in";
+const markChunk = () => pngChunk("tEXt", Buffer.from("Comment\0" + standInMark, "latin1"));
+export const isStandIn = (bytes) => bytes.includes(standInMark, 0, "latin1");
+// After IHDR, which is always the first chunk (8 + 25 bytes).
+const marked = (png) => Buffer.concat([png.subarray(0, 33), markChunk(), png.subarray(33)]);
+
+/**
+ * The bytes of a stand-in. `tree` is the client directory (for tint and
+ * mirror), `fullCache()` the full game cache, `openSource(alias)` the
+ * fetcher's reader of a manifest source.
+ */
+export async function makeStandIn(recipe, context) {
+  return marked(await makeUnmarked(recipe, context));
+}
+async function makeUnmarked(recipe, { tree, fullCache, openSource }) {
+  const [kind, ...rest] = recipe.split(":");
+  const spritesOf = async (archive, group) => {
+    const stored = await (await fullCache()).group(Number(archive), Number(group));
+    if (!stored) throw new Error("full cache has no sprite group " + archive + "/" + group);
+    return decodeSprites(await unpack(stored));
+  };
+  if (kind === "sprite") {
+    const [archive, group, frame, canvas] = rest[0].split("/");
+    const sprite = (await spritesOf(archive, group))[frame];
+    if (!sprite) throw new Error("no frame " + rest[0]);
+    return encodePng(canvas ? onCanvas(sprite) : sprite);
+  }
+  if (kind === "frames") {
+    const [archive, group, range] = rest[0].split("/");
+    const [first, last] = range.split("-").map(Number);
+    const all = await spritesOf(archive, group);
+    const frames = all.slice(first, last + 1).map(onCanvas);
+    if (rest[1] === "anim") return encodeApng(frames, 100);
+    const count = Number(rest[2] ?? frames.length);
+    const { width, height } = frames[0];
+    const sheet = solid(width * count, height, "transparent");
+    frames.forEach((frame, index) => {
+      for (let y = 0; y < height; y++) frame.rgba.copy(sheet.rgba, (y * width * count + index * width) * 4, y * width * 4, (y + 1) * width * 4);
+    });
+    return encodePng(sheet);
+  }
+  if (kind === "tint" || kind === "mirror") {
+    const image = decodePng(await fs.readFile(path.join(tree, rest[0])));
+    const { width, height, rgba } = image;
+    const out = Buffer.alloc(rgba.length);
+    if (kind === "mirror") {
+      for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) rgba.copy(out, (y * width + width - 1 - x) * 4, (y * width + x) * 4, (y * width + x) * 4 + 4);
+      return encodePng({ width, height, rgba: out });
+    }
+    const target = rest[1] === "-" ? null : rest[1].split(",").map(Number);
+    const dim = Number(rest[2] ?? 1);
+    for (let i = 0; i < rgba.length; i += 4) {
+      const [r, g, b, a] = rgba.subarray(i, i + 4);
+      const light = Math.max(r, g, b) / 255;
+      const colour = target ? target.map((channel) => channel * light) : [r, g, b];
+      out.set([...colour.map((channel) => Math.round(Math.min(255, channel * dim))), a], i);
+    }
+    return encodePng({ width, height, rgba: out });
+  }
+  if (kind === "from") return (await openSource(rest[0]))(rest.slice(1).join(":"));
+  if (kind === "solid") {
+    const [width, height] = rest[0].split("x").map(Number);
+    return encodePng(solid(width, height, rest[1]));
+  }
+  throw new Error("unknown stand-in recipe " + recipe);
+}

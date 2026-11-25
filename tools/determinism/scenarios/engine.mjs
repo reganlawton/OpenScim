@@ -137,8 +137,12 @@ const helmetWeapons = [
   28991 /* Atlatl dart */,
 ];
 
-/** The kinds of engine/encounterKinds.js when this list was written; the scenario below shows their entries and no others. */
-const kindsOfTheTable = ["zebak", "toa_nexus", "vardorvis", "duke_sucellus", "whisperer", "leviathan", "yama_p3", "lobby", "sol_heredit", "inferno"];
+/**
+ * Kinds of engine/encounterKinds.js that had an encounter when this list was written; the scenario below shows their
+ * entries and no others. None that is waiting for its fight: its entry changes when the fight is added, and that
+ * must not change a digest of the engine's.
+ */
+const kindsOfTheTable = ["zebak", "toa_nexus", "vardorvis", "yama_p3", "lobby", "sol_heredit", "inferno"];
 /** The functions of the engine chunk that the interface calls directly, on fixed arguments. */
 function exportedHelpers(engine, objTypeLoader) {
   const pouch = { kind: "divine", slots: [{ id: rune.fire }, null, { id: rune.blood }, { id: 4699 /* Lava rune */ }] };
@@ -167,8 +171,9 @@ function exportedHelpers(engine, objTypeLoader) {
     inventory: [engine.createEmptyInventory().length, engine.normalizeInventory([{ id: 1, extra: true }, null, { id: 2 }])],
     stackable: [item.dragonArrow, item.shark].map((id) => [engine.isItemStackable(id, 1, objTypeLoader), engine.isItemStackable(id, 5, null)]),
     kinds: {
-      // The entries of a fixed list of kinds, so that a new encounter does not change the digest.
-      definitions: engine.encounterDefinitions.filter((definition) => kindsOfTheTable.includes(definition.kind)),
+      // The entries of a fixed list of kinds, in the order of that list, so that neither a new encounter nor the
+      // order of the registry changes the digest.
+      definitions: kindsOfTheTable.map((kind) => engine.encounterDefinitions.find((definition) => definition.kind === kind)),
       retired: engine.retiredEncounterKindEntries,
       resolved: ["zuk", "inferno", "yama_p3_glyphic", "nonsense"].map((kind) => [engine.resolveRetiredEncounterKind(kind), engine.resolveBaseEncounterKind(kind), engine.isEncounterKind(kind)]),
       consolidated: engine.consolidateRetiredEncounterKinds({ zuk: 2, inferno: 3, yama_p3: 1 }, (kept = 0, retired) => kept + retired),

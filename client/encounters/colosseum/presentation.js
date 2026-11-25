@@ -142,3 +142,5 @@ export const colosseumPresentation = (BaseScene) => ({
     wikiUrl: "https://oldschool.runescape.wiki/w/Fortis_Colosseum/Strategies",
   },
 });
+// How presentations.js finds it.
+export { colosseumPresentation as presentation };

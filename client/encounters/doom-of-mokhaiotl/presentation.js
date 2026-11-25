@@ -74,3 +74,5 @@ export const doomDeepPresentation = (BaseScene) => ({
   renderConfig: deepRenderConfig,
   sceneBuilder: (context) => buildScene(BaseScene, deepRenderConfig, context),
 });
+// How presentations.js finds them. The deeper room's after the Doom's own: its kind takes this one.
+export const presentations = [doomPresentation, doomDeepPresentation];
