@@ -416,6 +416,19 @@ function buildNpcActor({
         nextActionTick: 0,
         targetId: "player",
         lastAttackTick: null,
+        ...(id === graardorActorId
+          ? {
+              // WIKI: Flinching — retaliation begins at impact, delays by half
+              // the attack speed (3 ticks), then has an 8-tick combat window.
+              // Inferred: a preselected aggression target is not a combat exchange.
+              retaliation: {
+                mode: "standard",
+                pending: [],
+                lastIncomingAttackTick: null,
+                startsOutOfCombat: true,
+              },
+            }
+          : {}),
         animations: { attack: null, defend: null, death: null, idle: null, walk: null },
       },
     },

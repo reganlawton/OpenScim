@@ -3,6 +3,15 @@ import { scheduleNextActionTick } from "../encounters/shared/npcHelpers.js";
 // still to come or was due no more than 8 ticks ago. An attack then does not
 // delay its next action (delayNextActionForRetaliation).
 function isAlreadyFightingSource(combat, tick, sourceId) {
+  // An aggressive NPC can acquire a target before its first combat exchange.
+  // Opt in so encounters with pre-existing retaliation rules stay unchanged.
+  if (
+    combat.retaliation?.startsOutOfCombat === true &&
+    combat.lastAttackTick === null &&
+    combat.retaliation.lastIncomingAttackTick === null
+  ) {
+    return false;
+  }
   return combat.targetId === sourceId && combat.nextActionTick + 8 >= tick;
 }
 function delayNextActionForRetaliation(combat, tick, sourceId) {

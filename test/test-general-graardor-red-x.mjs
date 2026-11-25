@@ -10,7 +10,7 @@ const { buildSimulationEngine } = await import("../client/engine/createSimulatio
 
 const altar = [54, 59];
 const bossId = "general_graardor";
-function createEngine() {
+function createEngine(overrides = {}) {
   return buildSimulationEngine({
     encounterConfig: {
       kind: bossId,
@@ -23,6 +23,7 @@ function createEngine() {
     enableIntro: false,
     combatSeed: 13,
     startPosition: [54, 50], // Fixture: underneath the south side of the 4x4 boss.
+    ...overrides,
   }, { encounterSeed: 13 });
 }
 const bossOf = (engine) => engine.worldState.getNpc(bossId);
@@ -99,3 +100,80 @@ assert.equal(cancelled.getEncounterSnapshot().state.redXInteractionActive, false
 cancelled.advanceTick([54, 50]);
 assert.notDeepEqual(bossOf(cancelled).position, [52, 50]);
 console.log("Graardor Red-X: overlap-only stall, immediate next-turn exit response, cooldown preserved, cancellation and reset");
+
+// Real Bowfa launch and impact: the opening miss still produces a hitsplat
+// and must flinch an otherwise ready boss before his NPC turn at impact.
+function openingShot() {
+  const engine = createEngine({ equipment: { weapon: 25865 }, startPosition: [54, 42] });
+  engine.injectAction({ type: "attackTarget", targetId: bossId });
+  engine.advanceTick([54, 42]);
+  const shot = engine.getLastTickEvents().find((event) => event.type === "attack_started" && event.sourceId === "player");
+  assert.ok(shot, "Bowfa actually fired");
+  assert.equal(shot.impactDelayTicks, 3);
+  assert.equal(bossOf(engine).combat.nextActionTick, 0, "Launch alone does not flinch");
+  engine.injectAction({ type: "attackTarget", targetId: null });
+  engine.advanceTick([54, 42]);
+  engine.advanceTick([54, 42]);
+  // Stand adjacent just before impact, so range cannot hide a missing delay.
+  engine.teleportPlayer([54, 46], 0);
+  engine.advanceTick([54, 46]);
+  assert.ok(engine.getLastTickEvents().some((event) => event.type === "hit_applied" && event.targetId === bossId));
+  assert.equal(bossOf(engine).combat.retaliation.lastIncomingAttackTick, 4);
+  assert.equal(bossOf(engine).combat.nextActionTick, 7, "Impact starts the 3-tick retaliation delay");
+  assert.equal(bossAttacks(engine).length, 0, "Eligible hit prevents a ready adjacent boss from attacking");
+  return engine;
+}
+
+const flinched = openingShot();
+for (let tick = 5; tick <= 6; tick++) {
+  flinched.advanceTick([54, 46]);
+  assert.equal(bossAttacks(flinched).length, 0);
+}
+flinched.advanceTick([54, 46]);
+assert.equal(bossAttacks(flinched).length, 1, "Standing still allows retaliation when the delay ends");
+
+const escaping = openingShot();
+for (let tick = 5; tick <= 7; tick++) {
+  escaping.advanceTick(altar);
+  assert.equal(bossAttacks(escaping).length, 0, "Flinch allows the following Red-X run underneath");
+}
+
+// WIKI: Flinching — intervening hits do not extend the retaliation delay or
+// its 8-tick in-combat window; a boss attack restarts it from its cooldown.
+const { scheduleNpcRetaliation } = await import("../client/engine/npcRetaliation.js");
+function hitAt(engine, tick, style = "range", accuracySucceeded = true) {
+  scheduleNpcRetaliation(bossOf(engine), {
+    sourceId: "player", launchTick: tick, impactTick: tick, style, accuracySucceeded,
+  });
+}
+const repeated = openingShot();
+hitAt(repeated, 5);
+assert.equal(bossOf(repeated).combat.nextActionTick, 7, "Repeated hits cannot indefinitely flinch");
+hitAt(repeated, 15);
+assert.equal(bossOf(repeated).combat.nextActionTick, 7, "Boundary tick remains in combat");
+hitAt(repeated, 16);
+assert.equal(bossOf(repeated).combat.nextActionTick, 19, "Flinch becomes eligible after the combat window");
+hitAt(flinched, 21);
+assert.equal(bossOf(flinched).combat.nextActionTick, 13, "Boss attack cooldown plus 8 ticks blocks flinching");
+hitAt(flinched, 22);
+assert.equal(bossOf(flinched).combat.nextActionTick, 25);
+
+const legacy = createEngine();
+delete bossOf(legacy).combat.retaliation.startsOutOfCombat;
+hitAt(legacy, 1);
+assert.equal(bossOf(legacy).combat.nextActionTick, 0, "Opening behavior stays unchanged without opting in");
+
+// A magic splash retaliates one tick after launch, rather than at its later impact.
+const splash = createEngine();
+scheduleNpcRetaliation(bossOf(splash), {
+  sourceId: "player", launchTick: 0, impactTick: 3, style: "magic", accuracySucceeded: false,
+});
+splash.advanceTick(altar);
+assert.equal(bossOf(splash).combat.nextActionTick, 4);
+assert.equal(bossOf(splash).combat.retaliation.lastIncomingAttackTick, 1);
+
+escaping.reset([54, 50]);
+assert.deepEqual(bossOf(escaping).combat.retaliation.pending, []);
+assert.equal(bossOf(escaping).combat.retaliation.lastIncomingAttackTick, null);
+assert.equal(bossOf(escaping).combat.lastAttackTick, null, "Restart restores opening flinch eligibility");
+console.log("Graardor flinching: real Bowfa impact delays retaliation, Red-X escape, repeat-hit immunity, cooldown window and reset");

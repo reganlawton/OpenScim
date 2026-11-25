@@ -336,6 +336,9 @@ Tick-context `inputs.targetTile` is the current walk or interaction destination,
 available after queued player inputs and before NPC turns. Treat it as read-only.
 Graardor uses the door/altar destination with true-tile overlap to decide whether
 Red-X prevents movement; leaving the footprint adds no separate stall timer.
+Graardor also opts into standard NPC retaliation at player-hit impact, including
+opening flinches despite having an aggression target already selected. This
+delays his next attack; it does not cancel an attack that has already launched.
 
 `world` is the `WorldState`: `tick`, `actors` (a Map by id; the player is
 `"player"`), `pendingHits`, `areaEffects`, `groundItems`, `occupancy`, and the
