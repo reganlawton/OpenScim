@@ -55,7 +55,9 @@ jobs:
       # The lists of the trimmed cache's groups, one file per encounter: ids
       # only, no game data.
       - name: Cache group lists
-        run: node test/test-cache-groups.mjs
+        run: |
+          node test/test-cache-groups.mjs
+          node test/test-trimmed-cache.mjs
 
       # Against HEAD, its default, the check compares a clean checkout with
       # itself. A pull request is checked out merged: HEAD^1 is its base.

@@ -16,6 +16,10 @@
 //                 presentation
 //   hostKind      the encounter whose boss can be fought here with all its
 //                 mechanics (encounter.js); the scene is then that encounter's
+//   refineArena?  what the encounter makes of the arena the map gives
+//                 (Duke's asylum adds its ice), with or without its boss
+//   arenaConfig?  with collision "custom": the arena itself, not read from
+//                 the map (the Leviathan's bridge)
 // The arena of the lobby is left out: its floor and walls are drawn by its
 // own scene (in client/assets/rendering.js), which the sandbox cannot use.
 import { solMapSquare, solPlayerStart } from "../sol-heredit/constants.js";
@@ -23,6 +27,8 @@ import { solBoundaryLocs } from "../sol-heredit/boundaryLocs.js";
 import { colosseumPlayerStart } from "../colosseum/constants.js";
 import { infernoMapSquare, infernoMapSquareOffsets, infernoPlayerStart, infernoExcludedStaticLocIds } from "../inferno/constants.js";
 import { vardorvisMapSquare } from "../vardorvis/encounter.js";
+import { arenaSeed as dukeArenaSeed, dukeMapSquare, dukeRoomArena, playerStart as dukePlayerStart } from "../duke-sucellus/encounter.js";
+import { leviathanFloorArena, leviathanMapSquare, playerStart as leviathanPlayerStart } from "../leviathan/encounter.js";
 
 export const sandboxKind = "sandbox";
 export const sandboxVariantKind = (arenaId) => (arenaId === sandboxArenas[0].id ? sandboxKind : `${sandboxKind}_${arenaId}`);
@@ -110,6 +116,28 @@ export const sandboxArenas = [
     collision: { mode: "auto", seed: [31, 28] }, // as doom-of-mokhaiotl/encounter.js seeds it
     locRender: { bounds: null, levels: [0] },
     camera: { yaw: 0, pitch: -45, zoom: 330 }, // doom-of-mokhaiotl/presentation.js (defaultCamera)
+  },
+  {
+    id: "duke",
+    hostKind: "duke_sucellus",
+    name: "Duke Sucellus' asylum",
+    mapSquare: dukeMapSquare,
+    playerStart: [...dukePlayerStart], // duke-sucellus/encounter.js
+    collision: { mode: "auto", seed: [...dukeArenaSeed] }, // as duke-sucellus/encounter.js seeds it
+    refineArena: dukeRoomArena,
+    locRender: { bounds: null, levels: [0, 1] },
+    camera: { yaw: 0, pitch: -40, zoom: 240 }, // duke-sucellus/presentation.js (defaultCamera)
+  },
+  {
+    id: "leviathan",
+    hostKind: "leviathan",
+    name: "The Leviathan's Scar",
+    mapSquare: leviathanMapSquare,
+    playerStart: [...leviathanPlayerStart], // leviathan/encounter.js
+    collision: { mode: "custom" }, // leviathan/encounter.js: the bridge is not level 0
+    arenaConfig: leviathanFloorArena,
+    locRender: { bounds: null, levels: [0, 1] },
+    camera: { yaw: 270, pitch: -45, zoom: 330 }, // leviathan/presentation.js (defaultCamera)
   },
   {
     id: "toa_nexus",

@@ -189,7 +189,7 @@ try {
       if (phase?.secondRoar) {
         const age = e.worldState.tick - phase.start;
         if (age === 31) jugsBeforeRoar = enc.phases.of("jug").length;
-        if ([32,33,34,36].includes(age)) {
+        if ([33,34,35,37].includes(age)) {
           roarDamage.push({age, rocks: enc.phases.of("rock").map(r => r.actor.vitals.hp),
             brokenJugs: enc.phases.of("broken-jug").map(j => j.actor.vitals.hp),
             bursts: enc.phases.splashes.filter(splash => splash.tick === e.worldState.tick).length});
@@ -281,10 +281,12 @@ try {
   console.log(JSON.stringify(trace));
   assert.ok(trace.jugsBeforeRoar >= 2);
   assert.deepEqual(trace.roarDamage, [
-    {age:32, rocks:[100,100,100], brokenJugs:Array(trace.jugsBeforeRoar).fill(0), bursts:0},
-    {age:33, rocks:[100,100,100], brokenJugs:[], bursts:trace.jugsBeforeRoar},
-    {age:34, rocks:[50,50,50], brokenJugs:[], bursts:0},
-    {age:36, rocks:[0,0,0], brokenJugs:[], bursts:0},
+    // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, the roar animated on tick 572, 29 ticks after its
+    // special started): 50 on the boulders and the jugs broken on ticks 576, 578 and 580, its 4th, 6th and 8th.
+    {age:33, rocks:[100,100,100], brokenJugs:Array(trace.jugsBeforeRoar).fill(0), bursts:0},
+    {age:34, rocks:[100,100,100], brokenJugs:[], bursts:trace.jugsBeforeRoar},
+    {age:35, rocks:[50,50,50], brokenJugs:[], bursts:0},
+    {age:37, rocks:[0,0,0], brokenJugs:[], bursts:0},
   ]);
   assert.equal(trace.rows.length, 4);
   assert.deepEqual(

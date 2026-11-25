@@ -20,6 +20,7 @@ import { pipeline } from "node:stream/promises";
 import JSZip from "jszip";
 import { SECTOR, container, unpack, unzipCache } from "./assets/cache.mjs";
 import { readCacheGroups } from "./assets/cache-groups.mjs";
+import { trimmedCacheStatus } from "./assets/trimmed-cache.mjs";
 import { decodePng, decodeSprites, encodePng, onCanvas, pixelHash } from "./assets/sprites.mjs";
 import { isStandIn, makeStandIn } from "./assets/standins.mjs";
 
@@ -174,20 +175,6 @@ async function buildTrimmedCache() {
   return count + " groups, " + sectors.length + " sectors, disk.zip " + bytes.length + " bytes, sha256 " + info.diskZipSha256;
 }
 
-// "ok" when disk.zip matches its manifest.json and holds every listed group.
-async function trimmedCacheStatus() {
-  const dir = path.join(out, "osrs-cache");
-  const bytes = await readIfExists(path.join(dir, "disk.zip"));
-  if (!bytes) return "missing";
-  const info = JSON.parse((await readIfExists(path.join(dir, "manifest.json"))) ?? "{}");
-  if (info.diskZipSha256 !== sha256(bytes)) return "disk.zip does not match manifest.json diskZipSha256";
-  const cache = await unzipCache(bytes);
-  for (const [archive, groups] of Object.entries(cacheGroups))
-    for (const group of groups)
-      if (!(await cache.group(Number(archive), group))) return "archive " + archive + " group " + group + " is missing";
-  return "ok";
-}
-
 // ------------------------------------------------------------------- media
 
 // Each source kind returns a function (rest of the "alias:rest" descriptor) -> bytes.
@@ -266,12 +253,17 @@ for (const file of manifest.files) {
   else wanted.push(file);
 }
 
-let cacheStatus = await trimmedCacheStatus();
+const cacheState = await trimmedCacheStatus(path.join(out, "osrs-cache"), cacheGroups);
+let cacheStatus = cacheState.state === "ok" ? "ok" : cacheState.message ?? cacheState.state;
 let cacheLine = cacheStatus === "ok" ? "already present" : cacheStatus;
 
 if (!opt.check) {
-  if (cacheStatus === "missing" || (cacheStatus !== "ok" && opt.force)) {
-    cacheLine = "built: " + (await buildTrimmedCache());
+  // A stale one (built here before a list of groups changed) is rebuilt
+  // unasked: it comes from the pinned OpenRS2 cache and the lists alone, and
+  // kept, it shows a black screen where a scene needs what it lacks. Only a
+  // disk.zip that is not one of ours waits for --force.
+  if (cacheState.state === "missing" || cacheState.state === "stale" || (cacheState.state !== "ok" && opt.force)) {
+    cacheLine = (cacheState.state === "stale" ? "rebuilt, " + cacheState.message + ": " : "built: ") + (await buildTrimmedCache());
     cacheStatus = "ok";
   } else if (cacheStatus !== "ok") cacheLine += " (kept; pass --force to rebuild)";
 

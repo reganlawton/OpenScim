@@ -5617,7 +5617,17 @@ var wm = class e extends Sm {
     r.offset = x;
     i.offset = P;
     l.offset = _;
+    // After the mappings: a byte, with ten more when it is not 0, then whether
+    // a bias for every face follows (all 35846 version 3 models of the cache
+    // end exactly so).
     o.offset = M;
+    if (o.Od() !== 0) {
+      o.Vd();
+      o.Vd();
+      o.Vd();
+      o.readInt();
+    }
+    const hasFaceBias = o.Od() === 1;
     for (let e = 0; e < g; e++) {
       this.faceColors[e] = a.Vd();
       if (m === 1 && this.faceRenderTypes) {
@@ -5642,7 +5652,7 @@ var wm = class e extends Sm {
       ) {
         this.textureCoords[e] = l.Od() - 1;
       }
-      if (this.faceBias && this.faceTextures && this.faceTextures[e] !== -1) {
+      if (this.faceBias && hasFaceBias) {
         this.faceBias[e] = o.Od() - 1;
       }
     }
@@ -5702,13 +5712,6 @@ var wm = class e extends Sm {
         this.textureMappingM[e] = a.Vd();
         this.textureMappingN[e] = a.Vd();
       }
-    }
-    a.offset = this.faceBias ? o.offset : M;
-    if (a.Od() !== 0) {
-      a.Vd();
-      a.Vd();
-      a.Vd();
-      a.readInt();
     }
   }
   bh(e) {
@@ -17920,6 +17923,11 @@ var ea = class {
     ce(this, "frameCounter", 0);
     ce(this, "CACHE_EVICTION_INTERVAL", 60);
     ce(this, "CACHE_MAX_STALE_FRAMES", 120);
+    // A mesh is evicted only once unused for this long too: per-frame meshes of
+    // looping loc and spotanim animations come back once per cycle, and 120
+    // frames is half a second at 240 Hz, so they were rebuilt every cycle.
+    ce(this, "CACHE_MAX_STALE_MS", 10000);
+    ce(this, "cacheEvictionMarks", []);
     ce(this, "residentSources", new Map());
     ce(this, "pendingSources", new Map());
     ce(this, "residentSourceBytes", 0);
@@ -18607,7 +18615,19 @@ var ea = class {
     if (!this.gl || this.frameCounter % this.CACHE_EVICTION_INTERVAL !== 0) {
       return;
     }
-    const e = this.frameCounter - this.CACHE_MAX_STALE_FRAMES;
+    const now = performance.now();
+    const marks = this.cacheEvictionMarks;
+    marks.push([this.frameCounter, now]);
+    while (marks.length > 1 && now - marks[1][1] >= this.CACHE_MAX_STALE_MS) {
+      marks.shift();
+    }
+    if (now - marks[0][1] < this.CACHE_MAX_STALE_MS) {
+      return;
+    }
+    const e = Math.min(
+      this.frameCounter - this.CACHE_MAX_STALE_FRAMES,
+      marks[0][0],
+    );
     const a = [];
     for (const [t, n] of this.meshVaoCache) {
       if (n.lastUsedFrame < e) {
@@ -44102,6 +44122,11 @@ var Q_ = class {
     this._L();
   }
   get FL() {
+    // Optional: a stance an encounter names (render config `playerStances`, state `playerStance`).
+    const stance = this.stanceName && this.animationSet.stances?.[this.stanceName];
+    if (stance) {
+      return stance;
+    }
     if (
       !this.primaryAnimCompleted &&
       this.primaryIsConsume &&
@@ -45959,6 +45984,18 @@ var SceneCompositor = class e {
             idleTurnLeft: this.xD(g, "standTurn"),
             idleTurnRight: this.xD(g, "standTurn"),
           };
+          // Optional: the other stances an encounter's render config names (`playerStances`: a name to the
+          // sequence of each slot). Its state's `playerStance` picks one each frame; no fight without the
+          // field is changed.
+          const stances = this.encounterRenderConfig?.playerStances;
+          if (stances) {
+            d.stances = {};
+            for (const [name, slots] of Object.entries(stances)) {
+              d.stances[name] = Object.fromEntries(
+                Object.entries(slots).map(([slot, seqId]) => [slot, this.BD(seqId)]),
+              );
+            }
+          }
           const c = new WF(
             a.mergedModel,
             e,
@@ -47284,6 +47321,9 @@ var SceneCompositor = class e {
     let $;
     let V;
     let K;
+    if (this.playerAnimController) {
+      this.playerAnimController.stanceName = simulationState.encounter?.state?.playerStance ?? null;
+    }
     const shove = simulationState.encounter?.state?.waveShove;
     if (shove && shove.tick === currentTick) {
       const fraction = Math.max(0, Math.min(1, (interpolatedTick ?? currentTick) - currentTick));
@@ -48531,38 +48571,42 @@ var SceneCompositor = class e {
               alpha: bF,
             }
           : null;
-    for (const { x: a, y: l, sizeX: sizeX, sizeY: sizeY } of n) {
-      if (i) {
-        for (let t = a; t < a + sizeX; t++) {
-          for (let a = l; a < l + sizeY; a++) {
-            this.XH(
-              e,
-              t,
-              a,
-              i.hsl,
-              i.alpha,
-              `pillar-tile-fill-${i.hsl}-${i.alpha}`,
-              0.008,
-              AF - 1,
-            );
+    // The fills and outlines of the pillars as one mesh, in the same order.
+    const key = `${pillarMarkerStyle2}|${r}|${t.pillarTileOpacity}|${n.map((p) => `${p.x},${p.y},${p.sizeX},${p.sizeY}`).join(";")}`;
+    this.pushTileOverlayBatch(e, `pillar-tiles-${a}`, key, () => key, (e) => {
+      for (const { x: a, y: l, sizeX: sizeX, sizeY: sizeY } of n) {
+        if (i) {
+          for (let t = a; t < a + sizeX; t++) {
+            for (let a = l; a < l + sizeY; a++) {
+              this.XH(
+                e,
+                t,
+                a,
+                i.hsl,
+                i.alpha,
+                `pillar-tile-fill-${i.hsl}-${i.alpha}`,
+                0.008,
+                AF - 1,
+              );
+            }
           }
         }
+        if (pillarMarkerStyle2 !== "tileFill" && t.pillarTileOpacity > 0) {
+          e.commands.push(
+            this.qH(
+              a,
+              l,
+              a + sizeX - 1,
+              l + sizeY - 1,
+              r,
+              kF(2),
+              AF,
+              t.pillarTileOpacity,
+            ),
+          );
+        }
       }
-      if (pillarMarkerStyle2 !== "tileFill" && t.pillarTileOpacity > 0) {
-        e.commands.push(
-          this.qH(
-            a,
-            l,
-            a + sizeX - 1,
-            l + sizeY - 1,
-            r,
-            kF(2),
-            AF,
-            t.pillarTileOpacity,
-          ),
-        );
-      }
-    }
+    });
   }
   // The plugin Attack Ranges (client/plugins/attackRanges.js): `overlay`
   // has the tiles to fill, the tiles to outline, the edges of the area's
@@ -48578,27 +48622,38 @@ var SceneCompositor = class e {
     }
     const { fill, border } = overlay;
     const borderWidth = yB(overlay.borderSize);
+    // In 3D the fill, the outlines and the lines are each one mesh, kept
+    // while the overlay (a new one each tick) lays out the same.
+    const batch = (slot, keyOf, draw) => (is2D ? draw(e) : this.pushTileOverlayBatch(e, slot, overlay, keyOf, draw));
     if (fill.alpha > 0) {
       const fillHsl = this.YH(fill.color);
-      for (const { 0: x, 1: y } of overlay.fillTiles) {
-        if (is2D) {
-          e.commands.push(CF(a, [x, y], TW(fill.color, fill.alpha), undefined, AF));
-        } else {
-          this.XH(e, x, y, fillHsl, fill.alpha, `attack-range-fill-${fill.color}-${fill.alpha}`, 0.008, AF - 1);
+      batch("attack-range-fill", () => `${fill.color}|${fill.alpha}|${overlay.fillTiles.join(";")}`, (e) => {
+        for (const { 0: x, 1: y } of overlay.fillTiles) {
+          if (is2D) {
+            e.commands.push(CF(a, [x, y], TW(fill.color, fill.alpha), undefined, AF));
+          } else {
+            this.XH(e, x, y, fillHsl, fill.alpha, `attack-range-fill-${fill.color}-${fill.alpha}`, 0.008, AF - 1);
+          }
         }
-      }
+      });
     }
     if (border.alpha > 0) {
       const borderHsl = this.YH(border.color);
-      for (const { 0: x, 1: y } of overlay.outlineTiles) {
-        e.commands.push(
-          is2D
-            ? CF(a, [x, y], undefined, { color: TW(border.color, border.alpha), widthPx: borderWidth }, AF)
-            : this.qH(x, y, x, y, borderHsl, kF(borderWidth), AF, border.alpha),
-        );
-      }
+      batch("attack-range-outline", () => `${border.color}|${border.alpha}|${borderWidth}|${overlay.outlineTiles.join(";")}`, (e) => {
+        for (const { 0: x, 1: y } of overlay.outlineTiles) {
+          e.commands.push(
+            is2D
+              ? CF(a, [x, y], undefined, { color: TW(border.color, border.alpha), widthPx: borderWidth }, AF)
+              : this.qH(x, y, x, y, borderHsl, kF(borderWidth), AF, border.alpha),
+          );
+        }
+      });
       if (overlay.lines.length > 0) {
-        this.MH(e, a, overlay.lines.map((line) => ({ ...line, color: border.color, opacity: border.alpha })), is2D, false, overlay.borderSize);
+        batch(
+          "attack-range-lines",
+          () => `${border.color}|${border.alpha}|${overlay.borderSize}|${overlay.lines.map((line) => `${line.x},${line.y},${line.orientation}`).join(";")}`,
+          (e) => this.MH(e, a, overlay.lines.map((line) => ({ ...line, color: border.color, opacity: border.alpha })), is2D, false, overlay.borderSize),
+        );
       }
     }
     if (overlay.npcIds.length === 0) {
@@ -48630,32 +48685,41 @@ var SceneCompositor = class e {
       return;
     }
     const i = yB(r);
-    for (const s of t) {
-      const t = s.fillOpacity ?? 0;
-      if (n) {
-        e.commands.push(
-          CF(
-            a,
-            [s.x, s.y],
-            t > 0 ? MW(0, 0, 0, t) : undefined,
-            s.opacity > 0
-              ? {
-                  color: TW(s.color, s.opacity),
-                  widthPx: i,
-                }
-              : undefined,
-            AF,
-          ),
-        );
-      } else {
-        const a = this.YH(s.color);
-        if (t > 0) {
-          this.XH(e, s.x, s.y, SF, t, `tile-marker-fill-${t}`, 0.008, AF - 1);
-        }
-        if (s.opacity > 0) {
-          e.commands.push(this.qH(s.x, s.y, s.x, s.y, a, kF(i), AF, s.opacity));
+    const drawTiles = (e) => {
+      for (const s of t) {
+        const t = s.fillOpacity ?? 0;
+        if (n) {
+          e.commands.push(
+            CF(
+              a,
+              [s.x, s.y],
+              t > 0 ? MW(0, 0, 0, t) : undefined,
+              s.opacity > 0
+                ? {
+                    color: TW(s.color, s.opacity),
+                    widthPx: i,
+                  }
+                : undefined,
+              AF,
+            ),
+          );
+        } else {
+          const a = this.YH(s.color);
+          if (t > 0) {
+            this.XH(e, s.x, s.y, SF, t, `tile-marker-fill-${t}`, 0.008, AF - 1);
+          }
+          if (s.opacity > 0) {
+            e.commands.push(this.qH(s.x, s.y, s.x, s.y, a, kF(i), AF, s.opacity));
+          }
         }
       }
+    };
+    if (n) {
+      drawTiles(e);
+    } else {
+      // In 3D the fills and outlines of the markers as one mesh, in the same order.
+      const key = `${i}|${t.map((s) => `${s.x},${s.y},${s.color},${s.opacity},${s.fillOpacity}`).join(";")}`;
+      this.pushTileOverlayBatch(e, "tile-markers", key, () => key, drawTiles);
     }
     if (s) {
       for (const s of t) {
@@ -49472,6 +49536,37 @@ var SceneCompositor = class e {
       e.commands.push(p);
     }
   }
+  // Tile overlays drawn as one mesh instead of one mesh a tile: the mesh3d
+  // commands `draw` pushes to a list of its own, merged in the order pushed
+  // (mergeTileOverlayMeshes), and kept under `slot` while the terrain is
+  // the same and `source` is, or `keyOf()` still gives the same key. A new
+  // mesh gets a new meshId, so a cached VAO is never drawn with stale
+  // contents; the renderer frees the old one when it goes unused.
+  pushTileOverlayBatch(e, slot, source, keyOf, draw) {
+    const batches = (this.tileOverlayBatches ??= new Map());
+    let batch = batches.get(slot);
+    const fresh =
+      batch?.heights === this.terrainHeights &&
+      batch.bounds === this.terrainBounds;
+    if (!fresh || batch.source !== source) {
+      const key = keyOf();
+      if (!fresh || batch.key !== key) {
+        const sink = {
+          commands: [],
+        };
+        draw(sink);
+        batch = {
+          heights: this.terrainHeights,
+          bounds: this.terrainBounds,
+          key,
+          commands: mergeTileOverlayMeshes(sink.commands, slot),
+        };
+        batches.set(slot, batch);
+      }
+      batch.source = source;
+    }
+    e.commands.push(...batch.commands);
+  }
   XH(e, a, t, n, s, r, i, l) {
     if (!this.terrainHeights) {
       return;
@@ -49636,6 +49731,79 @@ var SceneCompositor = class e {
     }
   }
 };
+// The tile meshes of XH, qH, QH and JH as one command. The pixels are the
+// same: these go to the pass without depth, which draws in the order pushed
+// with the same state for each (the shader scene-base, no depth bias, the
+// same culling), and one draw of their triangles in that order blends them
+// in that order too. Commands that differ in any of that are left as they
+// are. zIndex and blend may differ (a fill and its outline): that pass reads
+// neither, and the canvas renderer skips mesh3d.
+let tileOverlayBatchSerial = 0;
+function mergeTileOverlayMeshes(commands, slot) {
+  if (commands.length < 2) {
+    return commands;
+  }
+  const first = commands[0];
+  let vertexCount = 0;
+  for (const c of commands) {
+    if (
+      c.kind !== "mesh3d" ||
+      c.depth !== "none" ||
+      c.materialId !== first.materialId ||
+      c.cullFace !== first.cullFace ||
+      c.shaderId !== undefined ||
+      c.depthBias !== undefined ||
+      c.animated ||
+      c.indices ||
+      c.uvs ||
+      c.perVertexTextureIds ||
+      c.tileCoords ||
+      c.perVertexFaceBias ||
+      !c.normals ||
+      !c.perVertexHslColors ||
+      c.modelMatrix.some((v, i) => v !== first.modelMatrix[i])
+    ) {
+      return commands;
+    }
+    vertexCount += c.positions.length / 3;
+  }
+  const positions = new Float32Array(vertexCount * 3);
+  const normals = new Float32Array(vertexCount * 3);
+  const perVertexHslColors = new Float32Array(vertexCount);
+  const perVertexAlphas = new Float32Array(vertexCount);
+  let hasAlphas = false;
+  let o = 0;
+  for (const c of commands) {
+    const n = c.positions.length / 3;
+    positions.set(c.positions, o * 3);
+    normals.set(c.normals, o * 3);
+    perVertexHslColors.set(c.perVertexHslColors, o);
+    if (c.perVertexAlphas) {
+      perVertexAlphas.set(c.perVertexAlphas, o);
+      hasAlphas = true;
+    } else {
+      // Without alphas a mesh is drawn at alpha 1 (cS).
+      perVertexAlphas.fill(1, o, o + n);
+    }
+    o += n;
+  }
+  return [
+    {
+      kind: "mesh3d",
+      meshId: `${slot}#${++tileOverlayBatchSerial}`,
+      materialId: first.materialId,
+      cullFace: first.cullFace,
+      modelMatrix: first.modelMatrix,
+      positions,
+      normals,
+      perVertexHslColors,
+      ...(hasAlphas ? { perVertexAlphas } : {}),
+      depth: "none",
+      blend: first.blend,
+      zIndex: first.zIndex,
+    },
+  ];
+}
 function PF(e) {
   const { context: context } = e;
   const {
@@ -55017,6 +55185,16 @@ var iN = class extends SceneCompositor {
     }
   }
   vM(e, a, t, n, s, r, i, l) {
+    if (!t) {
+      // In 3D the tiles as one mesh, as the loop below would draw them.
+      const key = `${r}|${s.a}|${l}|${n.join(";")}`;
+      this.pushTileOverlayBatch(e, i, key, () => key, (e) => {
+        for (const [o, d] of n) {
+          this.XH(e, o, d, r, s.a, i, l, wF + 1);
+        }
+      });
+      return;
+    }
     for (const [o, d] of n) {
       if (t) {
         const t = [

@@ -353,11 +353,19 @@ class VardorvisEncounter {
   // tick the first hit on him lands.
   onPlayerAttackResolved(hit, context) {
     if (this.fightStart !== null || hit.targetId !== bossActorId) return;
-    this.fightStart = hit.tick;
-    this.nextAxesTick = hit.tick + this.version.axeClock.first;
+    this.begin(hit.tick, context);
+  }
+  begin(tick, context) {
+    this.fightStart = tick;
+    this.nextAxesTick = tick + this.version.axeClock.first;
     const boss = context.world.getNpc(bossActorId);
-    if (boss) boss.combat.nextActionTick = hit.tick + firstAttackTicks;
-    this.raiseBarrier({ ...context, tick: hit.tick });
+    if (boss) boss.combat.nextActionTick = tick + firstAttackTicks;
+    this.raiseBarrier({ ...context, tick });
+  }
+  // The sandbox's free-for-all starts his fight at once (sandbox/encounter.js):
+  // there the monsters fight him, and the player may only watch.
+  wakeBoss(context) {
+    if (this.fightStart === null) this.begin(context.tick, context);
   }
 
   // --- each tick, before the NPCs ---------------------------------------

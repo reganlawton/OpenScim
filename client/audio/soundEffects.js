@@ -349,18 +349,75 @@ export function soundEffectWav(bytes) {
 
 // ------------------------------------------------------ the simulator's cache
 
-// WAV for effect `id` from a loaded CacheManager, or null when the cache is
-// not loaded or does not hold that effect (the trimmed cache carries only the
-// ids listed under "4" in tools/assets/cache-groups.json and the files of
-// tools/assets/cache-groups/).
-function wavFromCache(cacheManager, id) {
-  let file;
+// The index 4 file of effect `id` from a loaded CacheManager, or null when the
+// cache is not loaded or does not hold that effect (the trimmed cache carries
+// only the ids listed under "4" in tools/assets/cache-groups.json and the
+// files of tools/assets/cache-groups/).
+function fileFromCache(cacheManager, id) {
   try {
-    file = cacheManager.cacheSystem.getIndex(4).getFile(id, 0);
+    return cacheManager.cacheSystem.getIndex(4).getFile(id, 0) || null;
   } catch {
     return null;
   }
+}
+// Its WAV, synthesized on this thread, or null.
+function wavFromCache(cacheManager, id) {
+  const file = fileFromCache(cacheManager, id);
   return file ? soundEffectWav(file.data) : null;
+}
+
+// The audio engine asks for every effect an encounter may play as soon as the
+// cache has loaded (334 on /yama/, about 1 s of synthesis on one thread), and
+// for any other on its first play. soundEffectsWorker.js does that synthesis
+// off the main thread, so it neither freezes the loading page nor makes a
+// frame late in a fight. Requests go to whichever worker has the fewest
+// waiting; where no worker can run, the effect is synthesized here, as before.
+// Up to 4 workers (inferred: enough that the preload waits on the main
+// thread, not on synthesis).
+const WORKERS = Math.max(1, Math.min(4, (globalThis.navigator?.hardwareConcurrency ?? 2) - 1));
+let workers = null;
+function synthesisWorkers() {
+  if (workers) return workers;
+  workers = [];
+  if (typeof Worker === "undefined") return workers;
+  try {
+    for (let i = 0; i < WORKERS; i++) {
+      const worker = new Worker(new URL("./soundEffectsWorker.js", import.meta.url), { type: "module" });
+      const entry = { worker, waiting: new Map(), next: 0 };
+      worker.onmessage = ({ data }) => {
+        entry.waiting.get(data.ticket)?.(data.wav);
+        entry.waiting.delete(data.ticket);
+      };
+      // A worker that cannot start (or dies) hands its requests back to the
+      // main thread and takes no more.
+      worker.onerror = (event) => {
+        event.preventDefault?.();
+        workers = workers.filter((other) => other !== entry);
+        for (const resolve of entry.waiting.values()) resolve(null);
+        entry.waiting.clear();
+        worker.terminate();
+      };
+      workers.push(entry);
+    }
+  } catch {
+    workers = [];
+  }
+  return workers;
+}
+// Started with the page, so that they have loaded by the time the cache has.
+// (Not inside a worker, which imports this module too.)
+if (typeof document !== "undefined") synthesisWorkers();
+
+// WAV bytes of one index 4 file, from a worker when there is one.
+function wavInWorker(bytes) {
+  const entry = synthesisWorkers().reduce((best, other) => (!best || other.waiting.size < best.waiting.size ? other : best), null);
+  if (!entry) return Promise.resolve(soundEffectWav(bytes));
+  const ticket = entry.next++;
+  return new Promise((resolve) => {
+    entry.waiting.set(ticket, resolve);
+    // A copy of just this file: `bytes` may be a view of a larger buffer.
+    entry.worker.postMessage({ ticket, bytes: bytes.slice() });
+  }).then((wav) => wav ?? soundEffectWav(bytes));
 }
 
 // Stands in for fetch("/assets/sounds/<id>.ogg"): 200 with a WAV body, 404
@@ -374,7 +431,8 @@ export async function soundEffectResponse(cacheManager, id) {
     });
   });
   if (state !== "LOADED") return new Response(null, { status: 503 });
-  const wav = wavFromCache(cacheManager, id);
+  const file = fileFromCache(cacheManager, id);
+  const wav = file && (await wavInWorker(file.data));
   return wav ? new Response(wav, { headers: { "Content-Type": "audio/wav" } }) : new Response(null, { status: 404 });
 }
 

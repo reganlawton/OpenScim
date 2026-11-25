@@ -15,6 +15,7 @@
 // getAttackRangeOverlay returns (rendering.js), and the menu of an NPC asks
 // isAttackDragProtected (Grid.js).
 import { hasLineOfSight } from "../engine/attackRange.js";
+import { getArenaCollisionMap } from "../engine/arena.js";
 import { getActiveSpell, getWeaponCategory } from "../data/weaponCategories.js";
 
 const enableStates = [
@@ -205,7 +206,65 @@ const isOnAnyTile = (npc, tiles) => {
   return false;
 };
 
+// The tiles of the last call and what they were worked out from: the tile,
+// the reach, the collision map, and the flags of every tile line of sight
+// can cross from there (the square of the reach, and one tile round it).
+// The flags are compared each call, since the fights change the map in place
+// (pillars, barriers, hazards).
+let tilesCache = null;
+const sameCollisionWindow = (cache, collisionMap) => {
+  if (cache.collisionMap !== collisionMap) {
+    return false;
+  }
+  if (!collisionMap) {
+    return true;
+  }
+  const { x, y, reach, flags } = cache;
+  let i = 0;
+  for (let dx = -reach - 1; dx <= reach + 1; dx++) {
+    for (let dy = -reach - 1; dy <= reach + 1; dy++) {
+      if (collisionMap.getFlag(x + dx, y + dy) !== flags[i++]) {
+        return false;
+      }
+    }
+  }
+  return true;
+};
+function getTilesInRangeCached([x, y], reach) {
+  const collisionMap = getArenaCollisionMap();
+  if (tilesCache && tilesCache.x === x && tilesCache.y === y && tilesCache.reach === reach && sameCollisionWindow(tilesCache, collisionMap)) {
+    return tilesCache.tiles;
+  }
+  let flags = null;
+  if (collisionMap) {
+    flags = new Int32Array((2 * reach + 3) ** 2);
+    let i = 0;
+    for (let dx = -reach - 1; dx <= reach + 1; dx++) {
+      for (let dy = -reach - 1; dy <= reach + 1; dy++) {
+        flags[i++] = collisionMap.getFlag(x + dx, y + dy);
+      }
+    }
+  }
+  tilesCache = { x, y, reach, collisionMap, flags, tiles: getTilesInRange([x, y], reach) };
+  return tilesCache.tiles;
+}
+
+// The layout of the last tiles and display mode.
+let layoutCache = null;
+function layOutRangeCached(tiles, displayMode) {
+  if (layoutCache?.tiles !== tiles || layoutCache.displayMode !== displayMode) {
+    layoutCache = { tiles, displayMode, layout: layOutRange(tiles, displayMode) };
+  }
+  return layoutCache.layout;
+}
+const noRange = { fillTiles: [], outlineTiles: [], lines: [] };
+
+const sameIds = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
+
 let overlay = null;
+// The last overlay made, kept while nothing is drawn, so that one drawn again
+// unchanged is the same object (the scenes key what they build on it).
+let lastOverlay = null;
 let dragProtectedIds = new Set();
 
 /**
@@ -229,7 +288,7 @@ export function updateAttackRanges({ enabled, settings, encounterKind, hotkeyOn,
   const drawable = shownRange >= 1 && allowed && (settings.showMeleeWeapons || shownRange !== 1);
   // Drag protection asks of the reach the fight uses, whatever is drawn.
   const tile = [Math.round(playerTile[0]), Math.round(playerTile[1])];
-  const tiles = getTilesInRange(tile, Math.max(1, shownRange || range));
+  const tiles = getTilesInRangeCached(tile, Math.max(1, shownRange || range));
   const attackable = (npcs ?? []).filter(isAttackable);
   if (settings.dragProtection) {
     dragProtectedIds = new Set(attackable.filter((npc) => !isOnAnyTile(npc, tiles)).map((npc) => npc.id));
@@ -239,16 +298,33 @@ export function updateAttackRanges({ enabled, settings, encounterKind, hotkeyOn,
   if (!showRange && !showNpcs) {
     return null;
   }
+  const layout = showRange ? layOutRangeCached(tiles, settings.displayMode) : noRange;
+  const npcIds = showNpcs ? attackable.filter((npc) => isOnAnyTile(npc, tiles)).map((npc) => npc.id) : [];
+  const key = {
+    layout,
+    rangeBorderColor: settings.rangeBorderColor,
+    rangeFillColor: settings.rangeFillColor,
+    borderSize: settings.borderSize,
+    npcHighlightOutlineColor: settings.npcHighlightOutlineColor,
+    npcHighlightFillColor: settings.npcHighlightFillColor,
+    npcOutlineThickness: settings.npcHighlightOutlineThickness,
+  };
+  // Nothing it is made of changed: the same overlay.
+  if (lastOverlay && Object.entries(key).every(([name, value]) => lastOverlay.key[name] === value) && sameIds(lastOverlay.overlay.npcIds, npcIds)) {
+    overlay = lastOverlay.overlay;
+    return overlay;
+  }
   overlay = {
-    ...(showRange ? layOutRange(tiles, settings.displayMode) : { fillTiles: [], outlineTiles: [], lines: [] }),
+    ...layout,
     border: parseArgb(settings.rangeBorderColor),
     fill: parseArgb(settings.rangeFillColor),
     borderSize: settings.borderSize,
-    npcIds: showNpcs ? attackable.filter((npc) => isOnAnyTile(npc, tiles)).map((npc) => npc.id) : [],
+    npcIds,
     npcOutline: parseArgb(settings.npcHighlightOutlineColor),
     npcFill: parseArgb(settings.npcHighlightFillColor),
     npcOutlineThickness: settings.npcHighlightOutlineThickness,
   };
+  lastOverlay = { key, overlay };
   return overlay;
 }
 

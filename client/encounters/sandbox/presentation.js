@@ -20,6 +20,11 @@ import { obstacleNpcTypeIds } from "./obstacles.js";
 import { closeSandboxEditor, syncSandboxEditor } from "./editor.js";
 import { setActiveScenario } from "./activeScenario.js";
 import { getRunningScenario, isHostedVisit } from "./visit.js";
+import { onTheBridge } from "../leviathan/presentation.js";
+
+// The arenas whose scene, without their boss, is not the default one: on the
+// Leviathan's Scar the actors stand on the bridge, as in its fight.
+const sceneOfArena = { leviathan: onTheBridge };
 
 // The catalog's monsters and the obstacles' boulder and jug (obstacles.js),
 // which have no sequence (idleSeqId -1, as toa/zebak/phases.js loads them).
@@ -86,7 +91,7 @@ const presentationOf = (arena) => (BaseScene, packHsl, { presentationOf: present
         scene.setEncounterRenderConfig?.(hostedRenderConfig());
         return withEditor(scene, kind, arena, true);
       }
-      return withEditor(buildScene(BaseScene, ownRenderConfig, context), kind, arena, false);
+      return withEditor(buildScene(sceneOfArena[arena.id]?.(BaseScene) ?? BaseScene, ownRenderConfig, context), kind, arena, false);
     },
     // The host's camera where the arena has one: it looks at the boss.
     get defaultCamera() {

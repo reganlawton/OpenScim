@@ -1,11 +1,11 @@
+import { withWaveTiles } from "./highlights.js";
 import { configure, soloZebakHitpoints, zebakAutoMaxHit } from "./rules.js";
-import { cyclesPerTick, spitClips, spitTiming, roarWindupTick, specialThrow } from "./timing.js";
+import { cyclesPerTick, spitClips, spitTiming, spitSoundCycles, roarWindupTick, roarSpecialRecovery, specialThrow } from "./timing.js";
 import {CloudMotion} from "./cloud-motion.js";
 
 import { ZebakPhases, phaseModels, acidScene } from "./phases.js";
 const mapSquare = { x: 61, y: 84 };
 const start = [29, 32];
-const spitBurstHeight = 560;
 const position = [14, 28];
 const onBiteRow = ([x, y], depth) =>
   x >= position[0] + 9 && x < position[0] + 9 + depth &&
@@ -46,6 +46,10 @@ const tail = {
   deathSeqId: 9635,
 };
 const renderConfig = {
+  // OBS (20261125-195433-zebak-wave.jsonl.gz, tick 158): the sequences of a player in the water, 773 standing
+  // and 772 for every way of moving (his "moves" of that tick: 773, 772, 772, 772, 772, 772, 772, -1).
+  playerStances: {swim: {idle: 773, walk: 772, run: 772, turnLeft: 772, turnRight: 772, walkBack: 772,
+    idleTurnLeft: 773, idleTurnRight: 773}},
   terrainMapSquare: mapSquare,
   locRender: { bounds: null, levels: [0, 1, 2] },
   primaryNpc: {
@@ -68,6 +72,11 @@ export const zebakPresentation = (BaseScene) => ({
   sceneBuilder(context) {
     class ZebakScene extends BaseScene {
       cloudPositions = new WeakMap();
+      // The waves' true tiles and drawn tiles are marked without being asked (highlights.js).
+      build(input, ...rest) {
+        const models = this.npcInstanceManager?.instanceRegistry;
+        return super.build(withWaveTiles(input, npc => models?.get(npc.id)?.lastRenderPosition), ...rest);
+      }
       getPlayingSequenceFrames() {
         const poses = super.getPlayingSequenceFrames();
         // The recorded roar and ground hits have the same mix level across the arena.
@@ -88,7 +97,11 @@ export const zebakPresentation = (BaseScene) => ({
         super.syncNpcInstances(npcs, hidden, state, paused);
         if (hidden || !state) return;
         for (const npc of npcs) {
-          if (npc.npcTypeId !== 11742 && npc.npcTypeId !== 11743) continue;
+          // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 162-197 and 438-458): a Tidal Wave (11738) is
+          // drawn as the client walks any NPC, 4 units a cycle where a tile a tick needs 128 in 30: 0.94 of a
+          // tile a tick, so it is seen a row behind its true tile from its first step and two rows behind by
+          // the far shore. The waves take the clouds' walk for it.
+          if (npc.npcTypeId !== 11742 && npc.npcTypeId !== 11743 && npc.npcTypeId !== 11738 && npc.npcTypeId !== 11739) continue;
           const model = manager.instanceRegistry.get(npc.id);
           if (!model) continue;
           let motion = this.cloudPositions.get(model);
@@ -128,23 +141,32 @@ export const zebakPresentation = (BaseScene) => ({
     layerName: "zebak",
     rules: {
       inferno_visual: {
-        preloadIds: [5860, 5836, 5845, 5904, 5838, 5851, 5863, 5829, 5881, 5888, 5852, 102, 5908, 5909, 5867, 5882, 5880],
+        preloadIds: [5860, 5836, 5845, 5904, 5838, 5851, 5863, 5829, 5881, 5888, 5852, 102, 5908, 5909, 5867, 5882, 5880, 5868, 5913, 5843, 1678, 2496],
         resolve(event) {
           if (event.greatRoarStart) return {kind: "play", sound: [
             {id: 5845, delayCycles: 32, channel: "sfx"},
             {id: 5904, delayCycles: 69, channel: "sfx"},
           ]};
+          // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 176, 192, 193, 195, 449, 450): heard with every wave hit.
+          if (event.waveHit) return {kind: "play", sound: {id: 5868, channel: "sfx"}};
           if (event.tidalSurgeSound) return {kind: "play", sound: {id: 5852, delayCycles: 20, channel: "sfx"}};
           if (event.projectiles?.some(cue => cue.spotAnimId === 2173))
-            return {kind: "play", sound: {id: 5908, delayCycles: specialThrow.sound, channel: "sfx"}};
-          if (event.objectsLanded) return {kind: "play", sound: {id: 5867, channel: "sfx"}};
-          if (event.graphics?.some(cue => cue.spotAnimId === 1556))
-            return {kind: "play", sound: {id: 5909, delayCycles: cyclesPerTick, channel: "sfx"}};
+            return {kind: "play", sound: {id: 5908, delayCycles: specialThrow.sound + (event.throwDelayCycles ?? 0), channel: "sfx"}};
+          // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 154, 305, 367, 426, 549): 5913 where the rocks and jugs
+          // land, and the splat 5909 one cycle after the spreading pools do.
+          // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 377, 399, 433, 564, 577): 2496 on a jug's tile
+          // the tick after its hitsplat, as it goes: hit by the player, pushed into a rock or broken by the roar.
+          if (event.jugBreakCause) return {kind: "play", sound: {id: 2496, channel: "sfx"}};
+          if (event.objectsLanded) return {kind: "play", sound: {id: 5913, channel: "sfx"}};
+          if (event.acidLanded) return {kind: "play", sound: {id: 5909, delayCycles: 1, channel: "sfx"}};
           if (event.graphics?.some(cue => cue.spotAnimId === 2195)) {
             const delay = event.shoreSoundDelayCycles ?? 0;
+            // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 155, 307, 427): with the boulders 1678 and
+            // the sweep 5882, and 200 cycles on the rocks' impact on the water, 5843.
             return {kind: "play", sound: [
+              {id: 1678, delayCycles: delay, channel: "sfx"},
               {id: 5882, delayCycles: delay, channel: "sfx"},
-              {id: 5880, delayCycles: delay + 200, channel: "sfx"},
+              {id: 5843, delayCycles: delay + 200, channel: "sfx"},
             ]};
           }
           if (event.graphics?.length === 1 && event.graphics[0].spotAnimId === 2449)
@@ -163,14 +185,13 @@ export const zebakPresentation = (BaseScene) => ({
         resolve(event) {
           if (event.attack !== "zebak_magic" && event.attack !== "zebak_range") return {kind: "pass"};
           const magic = event.attack === "zebak_magic";
-          const impactTicks = event.impactTick - event.launchTick;
-          const redirectTicks = (impactTicks + 1) / 2;
+          const cycles = spitSoundCycles(event.impactTick - event.launchTick);
           return {
             kind: "play",
             sound: [
               {id: magic ? 5823 : 5819, channel: "sfx"},
-              {id: magic ? 5878 : 5896, delayCycles: redirectTicks * cyclesPerTick, channel: "sfx"},
-              {id: 5884, delayCycles: impactTicks * cyclesPerTick, channel: "sfx"},
+              {id: magic ? 5878 : 5896, delayCycles: cycles.redirect, channel: "sfx"},
+              {id: 5884, delayCycles: cycles.impact, channel: "sfx"},
             ],
           };
         },
@@ -213,10 +234,12 @@ export function zebakDefinition({
       this.tailRemovalTick = null;
       this.attackTick = 4;
       this.phases = new ZebakPhases(this.random, walkable, animate);
+      this.phases.bloodTrail = () => Array.from(this.bloodTrail.values(), mark => mark.position);
       this.pendingBarrages = new Set();
       this.pendingBloodClouds = new Set();
       this.bloodSpellIndex = 0;
       this.autoCount = 0;
+      this.bloodEvery = 6;
       this.firstEnragedAttack = false;
       this.bleedStart = null;
       this.bloodTrail = new Map();
@@ -291,8 +314,8 @@ export function zebakDefinition({
     executeCommand(command, context) {
       return this.phases.command(command, context);
     }
-    moveDisplacedPlayer(player, target, place, path, damage) {
-      return this.phases.moveWithTide(player, target, place, path, damage);
+    moveDisplacedPlayer(player, target, place, step) {
+      return this.phases.moveWithTide(player, target, place, step);
     }
     approachRange(targetId, weaponRange) {
       if (this.phases.pendingJug?.id !== targetId) return undefined;
@@ -389,6 +412,11 @@ export function zebakDefinition({
             ? false
             : null,
         onPlayerDamageTaken: (hit) => {
+          // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, six wave hits and three acid hits, ticks 167-195
+          // and 449-450): each also took prayer points, 2 for a 14, 3 for a 17 or 19, 4 for a 22.
+          // inferred: a fifth of the damage.
+          const prayerPointsDelta = hit.source === "Tidal Wave" || hit.source === "Zebak acid"
+            ? -Math.floor(hit.effectiveDamage / 5) : 0;
           if (hit.source === "Blood Barrage" && this.boss)
             this.boss.vitals.hp = Math.min(
               this.boss.vitals.maxHp,
@@ -402,6 +430,7 @@ export function zebakDefinition({
             )
               this.bleedStart = hit.tick;
           }
+          return prayerPointsDelta ? { prayerPointsDelta } : undefined;
         },
       };
     }
@@ -421,12 +450,18 @@ export function zebakDefinition({
       if (this.phases.active) {
         const phase = this.phases.active;
         const elapsed = context.tick - phase.start;
-        if (phase.kind === "roar" ? elapsed >= roarWindupTick(this.settings.period, phase.secondRoar) : elapsed < 16) return result;
+        // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, spits at ticks 163/170/180, 315/322/332 and
+        // 435/442/452, the waves starting on 147, 299 and 419): during the waves he spits 16 and 23 ticks
+        // after they start, and then not before the 33rd. inferred: the same hold at every attack period.
+        const held = elapsed < 16 || (elapsed > 23 && elapsed < 33);
+        if (phase.kind === "roar" ? elapsed >= roarWindupTick(this.settings.period, phase.secondRoar) : held) return result;
       }
       if (this.phases.queue.length && this.phases.canBegin(context.tick)) {
         const kind = this.phases.queue.shift();
-        this.phases.begin(context, kind, this.settings);
-        this.attackTick = context.tick + (kind === "roar" ? 10 : this.settings.period);
+        // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 147, 360, 419): a blood spell that is due is cast as the special starts.
+        const afterBloodSpell = this.castBloodSpell(context, actor);
+        this.phases.begin(context, kind, this.settings, afterBloodSpell);
+        this.attackTick = context.tick + (kind === "roar" ? roarSpecialRecovery : this.settings.period);
         return result;
       }
       const player = context.world.actors.get("player");
@@ -437,23 +472,7 @@ export function zebakDefinition({
       const recovery = enraged && !this.firstEnragedAttack ? this.settings.enragePeriod : this.settings.period;
       this.attackTick = context.tick + recovery;
       this.firstEnragedAttack = false;
-      if (this.settings.blood && !this.phases.active && ++this.autoCount >= (enraged ? 8 : 6)) {
-        this.autoCount = 0;
-        const due = context.tick + 3;
-        if (this.bloodSpellIndex === 0) {
-          this.pendingBloodClouds.add(due);
-        } else {
-          this.pendingBarrages.add(due);
-          const [x, y] = actor.position;
-          this.phases.graphics(context, [2, 6].map(handY => ({
-            spotAnimId: 377,
-            target: {kind: "tile", position: [x + 7, y + handY]},
-            height: 16,
-            delayCycles: 0,
-          })));
-        }
-        this.bloodSpellIndex = (this.bloodSpellIndex + 1) % 3;
-      }
+      this.castBloodSpell(context, actor);
       const melee = onBiteRow(player.position, 1);
       const magic = !melee && this.random() < 0.5;
       const timing = spitTiming(this.settings.path, enraged);
@@ -508,44 +527,31 @@ export function zebakDefinition({
           }, timing.arrival);
         const sourcePosition = split.map(v => v + 0.5);
         const distanceToBurst = Math.hypot(sourcePosition[0] - origin[0], sourcePosition[1] - origin[1]);
-        // The floor under the burst is 0.9 tiles higher than under the jaw.
-        // The intact pot is still rising at midflight and levels out at the split.
+        const spitBurstHeight = timing.burstHeight;
+        // Where no slope is recorded: the floor under the burst is 0.9 tiles higher than under the jaw, and
+        // the intact pot is still rising at midflight and levels out at the split.
         const rise = (spitBurstHeight - mouth.height) / 128 + 0.9;
-        const slope = Math.round(128 / Math.PI * Math.atan2(2 * rise, distanceToBurst));
+        const slope = timing.slopes[0] ?? Math.round(128 / Math.PI * Math.atan2(2 * rise, distanceToBurst));
+        const enragedPot = enraged && timing.enragedProjectiles;
         projectiles.push({
-          ...flight(magic ? (enraged ? 2177 : 2176) : enraged ? 2179 : 2178,
+          ...flight(magic ? (enragedPot ? 2177 : 2176) : enragedPot ? 2179 : 2178,
             launchCycle, mouth.height, spitBurstHeight, slope),
           sourcePosition: origin,
           target: { kind: "tile", position: split },
           endDelayCycles: splitCycle,
         });
+        // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, 31 magic and 45 ranged spits): one piece comes
+        // down on the player, 2181 of the magic pot and 2187 of the ranged; nothing else leaves the burst.
         projectiles.push({
-          ...flight(magic ? 2181 : 2182, splitCycle, spitBurstHeight, 64, 0),
+          ...flight(magic ? 2181 : 2187, splitCycle, spitBurstHeight, timing.endHeight, timing.slopes[1]),
           sourcePosition,
         });
         graphics.push({
           spotAnimId: magic ? 2186 : 2185,
           target: { kind: "tile", position: split },
-          height: spitBurstHeight,
+          height: timing.burstGraphicHeight,
           delayCycles: splitCycle,
         });
-        if (!magic) {
-          [
-            [-1, 0],
-            [1, 0],
-            [0, -1],
-            [0, 1],
-          ].forEach(([dx, dy], i) =>
-            projectiles.push({
-              ...flight(2187 + i, splitCycle, spitBurstHeight, 0, 0),
-              sourcePosition,
-              target: {
-                kind: "tile",
-                position: [split[0] + dx, split[1] + dy],
-              },
-            }),
-          );
-        }
       }
       showAttack(context, {
         actor,
@@ -561,6 +567,28 @@ export function zebakDefinition({
         graphics,
       });
       return result;
+    }
+    // Every sixth spit he casts a blood spell with it, every eighth once enraged.
+    // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, all ten casts, e.g. ticks 147, 264, 360): both hands show 377 for the clouds
+    // as for the barrage, on the tiles 7 east, 6 north and 6 east, 2 north of his south-west tile.
+    // OBS (casts at ticks 604 and 637, enraged from 618): the count to the next cast is that of the form he
+    // had at the last cast. Open: the recorded gaps between casts fit no count through the specials.
+    castBloodSpell(context, actor) {
+      if (!this.settings.blood || this.phases.active || ++this.autoCount < this.bloodEvery) return false;
+      this.autoCount = 0;
+      this.bloodEvery = this.phases.enraged ? 8 : 6;
+      const due = context.tick + 3;
+      if (this.bloodSpellIndex === 0) this.pendingBloodClouds.add(due);
+      else this.pendingBarrages.add(due);
+      const [x, y] = actor.position;
+      this.phases.graphics(context, [[7, 6], [6, 2]].map(([handX, handY]) => ({
+        spotAnimId: 377,
+        target: {kind: "tile", position: [x + handX, y + handY]},
+        height: 16,
+        delayCycles: 0,
+      })));
+      this.bloodSpellIndex = (this.bloodSpellIndex + 1) % 3;
+      return true;
     }
     onNpcDefeated(defeat, context, owner) {
       if (defeat.npcId !== "zebak") return;

@@ -60,7 +60,7 @@ try {
   const tickBeforeClick = await page.evaluate(() => engine.worldState.tick);
   await page.mouse.click(640,425);
   await page.waitForFunction(tick => engine.worldState.tick >= tick + 2 && !engine.player().isMoving, tickBeforeClick);
-  for (const [weapon, expected] of [[20997,[2700]],[9185,[2695]],[27275,[6410,6412,1460]]]) {
+  for (const [weapon, expected] of [[20997,[2700,2496]],[9185,[2695,2496]],[27275,[6410,6412,1460,2496]]]) {
     const id = await page.evaluate(weapon => {
       const player = engine.player();
       engine.encounter.attackTick = engine.worldState.tick + 1000;

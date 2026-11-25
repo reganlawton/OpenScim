@@ -19735,6 +19735,7 @@ function Bpe(h2) {
 var zpe = ({
   cacheState: cacheState,
   isFullyLoaded: isFullyLoaded,
+  isSceneReady: isSceneReady,
   onRetry: onRetry,
 }) => {
   const [h6, h7] = (0, React.useState)(true);
@@ -19905,12 +19906,16 @@ var zpe = ({
     if (isFullyLoaded) {
       hj.current = 100;
       hy();
+      // Fades out as soon as the renderer's onSceneReady has fired (terrain,
+      // player, NPCs and locs loaded), or 1800 ms after loading if it never
+      // does, as before. Unmounts after the 1.5 s fade in application.css.
+      const hC = isSceneReady ? 0 : 1800;
       const hA = setTimeout(() => {
         h9(true);
-      }, 1800);
+      }, hC);
       const hB = setTimeout(() => {
         h7(false);
-      }, 3300);
+      }, hC + 1500);
       return () => {
         clearTimeout(hA);
         clearTimeout(hB);
@@ -19918,7 +19923,7 @@ var zpe = ({
     }
     h9(false);
     h7(true);
-  }, [isFullyLoaded, hy]);
+  }, [isFullyLoaded, isSceneReady, hy]);
   if (h6) {
     return (0, jsxRuntime.jsx)("div", {
       className: "loading-screen " + (h8 ? "hidden" : ""),
@@ -30025,7 +30030,8 @@ function $fe({ isOpen: isOpen, onClose: onClose, onLoad: onLoad }) {
   const h6 = (0, React.useRef)(null);
   yle(h6, isOpen);
   const h7 = bpe(h6, onClose);
-  const [h8, h9] = (0, React.useState)(Sfe());
+  // Lazy: the stored index was read and parsed on every render, closed or not.
+  const [h8, h9] = (0, React.useState)(Sfe);
   const [ha, hb] = (0, React.useState)([]);
   const [hc, hd] = (0, React.useState)("loading");
   const [hf, hg] = (0, React.useState)(0);
@@ -31250,7 +31256,9 @@ function dye(h2) {
 function uye(h2) {
   return dye(h2.canonicalPath ?? h2.path);
 }
-function hye({ path: path }) {
+// memo: a pure function of `path` (the encounter list is fixed at load);
+// it rebuilt the whole route list with every tick.
+var hye = (0, React.memo)(function hye({ path: path }) {
   const h4 = lye(path);
   const h5 = sye().filter((h6) => !h6.noindex);
   return (0, jsxRuntime.jsxs)("section", {
@@ -31283,7 +31291,7 @@ function hye({ path: path }) {
       }),
     ],
   });
-}
+});
 function pye({ doc: h2, className: h3 = "" }) {
   return (0, jsxRuntime.jsx)("a", {
     className: ("legal-links__link " + h3).trim(),
@@ -49756,13 +49764,18 @@ function eCe({ devHarness: devHarness } = {}) {
         return t0 <= t1;
       },
     };
-    const sY = (0, React.useRef)(
-      new by(Swe, ...O(), {
+    // Made once: `useRef(new ...)` built (and threw away) both on every render.
+    const sY = (0, React.useRef)(null);
+    if (sY.current === null) {
+      sY.current = new by(Swe, ...O(), {
         name: "core",
         rules: wwe,
-      }),
-    );
-    const sZ = (0, React.useRef)(new kwe(Swe));
+      });
+    }
+    const sZ = (0, React.useRef)(null);
+    if (sZ.current === null) {
+      sZ.current = new kwe(Swe);
+    }
     (0, React.useEffect)(() => {
       // Creating the audio context blocks for 40ms and more. Done here, behind
       // the loading screen, it starts suspended and the first click only has
@@ -51409,6 +51422,7 @@ function eCe({ devHarness: devHarness } = {}) {
     prayerPresentation: prayerPresentation,
     quickPrayersActive: quickPrayersActive,
     setEngine: setEngine,
+    isSceneReady: isSceneReady,
     setIsSceneReady: setIsSceneReady,
     setSimulationState: setSimulationState,
     setTargetTile: setTargetTile,
@@ -51423,7 +51437,8 @@ function eCe({ devHarness: devHarness } = {}) {
     attackStylePerCategory: attackStylePerCategory,
     autoAdvance: autoAdvance,
     pauseWhenUnfocused: pauseWhenUnfocused,
-    modalPaused: (oF || oG > 0) && "lobby" !== sceneState.kind,
+    // kY: the Plugins panel is open. It holds the fight as a dialog does.
+    modalPaused: (oF || oG > 0 || kY) && "lobby" !== sceneState.kind,
     graphicsHeld: kA,
     replayPracticeHeld: oJ,
     replayPracticeUnavailableReason:
@@ -53674,6 +53689,7 @@ function eCe({ devHarness: devHarness } = {}) {
         (0, jsxRuntime.jsx)(zpe, {
           cacheState: cacheDownloadState,
           isFullyLoaded: isFullyLoaded,
+          isSceneReady: isSceneReady,
           onRetry: handleCacheRetry,
         }),
         (0, jsxRuntime.jsx)(tme, {

@@ -1,5 +1,7 @@
 import { cpSync, existsSync, statSync } from "node:fs";
 import { defineConfig } from "vite";
+import { readCacheGroups } from "./tools/assets/cache-groups.mjs";
+import { trimmedCacheStatus } from "./tools/assets/trimmed-cache.mjs";
 
 // The client asks for game media, the cache and the bzip2 decoder by URL at
 // runtime, so the bundler never sees them. Copy them into the build as they are.
@@ -16,6 +18,23 @@ const copyRuntimeFiles = {
         !/\.(js|css|html)$/.test(source) ||
         source.endsWith("bzip2-module.js"),
     });
+  },
+};
+
+// The build ships client/osrs-cache/disk.zip as it is. One built before a list
+// of tools/assets/cache-groups/ changed lacks that list's groups, and the scene
+// that needs them loads to a black screen ("Empty container <index>:<group>"),
+// so such a build fails. Without a disk.zip (GitHub Actions) it goes on: game
+// data never reaches CI.
+const trimmedCacheIsCurrent = {
+  name: "trimmed-cache-is-current",
+  apply: "build",
+  async buildStart() {
+    const status = await trimmedCacheStatus("client/osrs-cache", readCacheGroups());
+    if (status.state === "missing") this.warn("client/osrs-cache/disk.zip is absent; the build has no game cache (npm run assets)");
+    else if (status.state === "stale")
+      this.error("client/osrs-cache/disk.zip is out of date: " + status.message + ". Run npm run assets, then build again.");
+    else if (status.state === "foreign") this.warn("client/osrs-cache/disk.zip: " + status.message + "; not checked");
   },
 };
 
@@ -48,6 +67,6 @@ export default defineConfig(({ mode }) => {
     server: { host: "127.0.0.1" },
     preview: { host: "127.0.0.1" },
     build: { outDir: "../dist", emptyOutDir: true },
-    plugins: [missingMediaIs404, copyRuntimeFiles],
+    plugins: [trimmedCacheIsCurrent, missingMediaIs404, copyRuntimeFiles],
   };
 });

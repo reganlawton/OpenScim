@@ -54,7 +54,8 @@ export function specialDrops(kind, iteration, random, walkable) {
   };
   add("rock", layout.rocks, 2172);
   add("jug", layout.jugs, 2173);
-  add("acid", layout.spread, 2194, true);
+  // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 150, 302, 363, 422, 545): a pool that spreads flies as 1555, a single pool as 2194.
+  add("acid", layout.spread, 1555, true);
   add("acid", layout.singles, 2194);
   return drops;
 }

@@ -42,19 +42,22 @@ const renderConfig = {
   createSceneObjectController: rubbleScene,
 };
 
+// A scene whose actors, rocks and ground effects stand on the raised surface
+// where the cache marks a bridge (tile render flag 2 of level 1): the fight's,
+// and the sandbox's on the Scar (sandbox/presentation.js).
+export const onTheBridge = (BaseScene) =>
+  class extends BaseScene {
+    setTerrainHeightsAndBounds(map, bounds) {
+      const heights = map.tileHeights[0].map((column, x) => column.map((height, y) => (map.tileRenderFlags[1]?.[x]?.[y] & 2 ? map.tileHeights[1][x][y] : height)));
+      return super.setTerrainHeightsAndBounds({ ...map, tileHeights: [heights, ...map.tileHeights.slice(1)] }, bounds);
+    }
+  };
+
 export const leviathanPresentation = (BaseScene) => ({
   kind: leviathanKind,
   renderConfig,
   sceneBuilder(context) {
-    class LeviathanScene extends BaseScene {
-      // Actors, rocks and ground effects stand on the raised surface where the
-      // cache marks a bridge (tile render flag 2 of level 1).
-      setTerrainHeightsAndBounds(map, bounds) {
-        const heights = map.tileHeights[0].map((column, x) => column.map((height, y) => (map.tileRenderFlags[1]?.[x]?.[y] & 2 ? map.tileHeights[1][x][y] : height)));
-        return super.setTerrainHeightsAndBounds({ ...map, tileHeights: [heights, ...map.tileHeights.slice(1)] }, bounds);
-      }
-    }
-    return buildScene(LeviathanScene, renderConfig, context);
+    return buildScene(onTheBridge(BaseScene), renderConfig, context);
   },
   // The player comes in west of the pool and looks east at it (inferred: to be
   // set in the browser).

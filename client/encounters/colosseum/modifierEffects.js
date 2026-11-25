@@ -21,19 +21,95 @@ import {
   getVolatilityExplosionTiles,
   getVolatilityGraphicDelayCycles,
 } from "../sol-heredit/modifierEffects.js";
-import { solarflareNpcDefinition, createSolarflareOrb, SolarflareDamage } from "../sol-heredit/solarflare.js";
+import { solarflareNpcDefinition, createSolarflareOrb } from "../sol-heredit/solarflare.js";
 import { registerWithInfernoVisuals, withInfernoVisuals } from "./visuals.js";
 
-// WIKI: the orb "circles around the pillars". No source has its tiles.
-// inferred: one orb goes round all four pillars, clockwise as Sol's orbs go,
-// one tile outside them: its corners are the tiles diagonally beyond each
-// pillar's outer corner, the first of them the south-west one.
-const solarflareCorners = [
-  [23, 25],
-  [23, 44],
-  [42, 44],
-  [42, 25],
+// Solarflare: an orb circles each of the four pillars, on the ring of tiles
+// that touch it (as reported from the game by players, not recorded; WIKI:
+// "Pillars are orbited by an orb", moving every 2 ticks and stopping for 7
+// at a corner).
+// The pillars are 3 by 3; their south-west tiles are the map's (24,26 is the
+// south-west pillar's, losLinks.js). A ring is 5 by 5, its corners one tile
+// diagonally out from the pillar's. inferred: the orbs go clockwise, as Sol's
+// do, and each starts on its ring's south-west corner.
+const pillarSouthWestTiles = [
+  [24, 26],
+  [24, 41],
+  [39, 41],
+  [39, 26],
 ];
+const pillarSize = 3;
+const solarflareRings = pillarSouthWestTiles.map(([x, y]) => [
+  [x - 1, y - 1],
+  [x - 1, y + pillarSize],
+  [x + pillarSize, y + pillarSize],
+  [x + pillarSize, y - 1],
+]);
+// WIKI (Solarflare): the orb "damages the player on contact"; level II
+// "deals more damage", level III "even more damage" and disables prayers.
+// WIKI (strategy page, tips, "Solarflare skip"): at levels I and II "the
+// flare damages only on its second tick", and at III the way past it is to
+// click its true tile as it moves. Sol's module hits when the orb steps off
+// the tile the player stood on, for 10 to 20 at every level, the hit
+// landing one tick later.
+// Here, at levels I and II, an orb hits a player who stands on its tile on
+// the second tick it is on that tile (the tick it arrived is the first): a
+// player who steps off before then, or steps on after, is not hit. At level
+// III it hits on contact: the orb and the player on one tile at any point of
+// its turn, once a contact. inferred: that the second tick is the only one
+// at a corner where the orb rests longer; that the contact of level III
+// counts its arrival on the player and his stepping onto it alike; the
+// damage of levels II and III, 15 to 25 and 20 to 30. The hit lands a tick
+// later, as in Sol's module.
+const solarflareDamageByLevel = { 1: [10, 20], 2: [15, 25], 3: [20, 30] };
+const isSameTile = (tile, otherTile) => tile[0] === otherTile[0] && tile[1] === otherTile[1];
+// The orb's hits of the waves; Sol's fight keeps his module's rule.
+class WaveSolarflareDamage {
+  pending = [];
+  // Level III: the ids of the orbs that touched the player on the last tick.
+  touching = new Set();
+  // The tick each orb arrived on the tile it stands on, by id.
+  arrivals = new Map();
+  reset() {
+    this.pending = [];
+    this.touching = new Set();
+    this.arrivals = new Map();
+  }
+  // `orbs` are the orbs after their turns; `movements` the engine's record
+  // of the steps they took this tick.
+  resolveTick(context, orbs, movements, level) {
+    const due = this.pending.filter((hit) => hit.tick <= context.tick);
+    this.pending = this.pending.filter((hit) => hit.tick > context.tick);
+    const damages = due.map((hit) => ({ baseDamage: hit.baseDamage, attackType: "typeless", source: "Solarflare", playerPosition: [...context.playerPos] }));
+    const movementOf = (orb) => movements.find((candidate) => candidate.npcId === orb.id);
+    for (const orb of orbs) {
+      if (movementOf(orb)?.moved === true) {
+        this.arrivals.set(orb.id, context.tick);
+      } else if (!this.arrivals.has(orb.id)) {
+        this.arrivals.set(orb.id, orb.spawnTick ?? context.tick);
+      }
+    }
+    let hits;
+    if (level >= 3) {
+      const touching = new Set(
+        orbs
+          .filter((orb) => isSameTile(orb.position, context.playerPos) || (movementOf(orb)?.moved === true && isSameTile(movementOf(orb).from, context.playerPos)))
+          .map((orb) => orb.id),
+      );
+      hits = [...touching].some((orbId) => !this.touching.has(orbId));
+      this.touching = touching;
+    } else {
+      hits = orbs.some((orb) => context.tick - this.arrivals.get(orb.id) === 1 && isSameTile(orb.position, context.playerPos));
+    }
+    if (hits) {
+      this.pending.push({ tick: context.tick + 1, baseDamage: solarflareDamageByLevel[level] ?? solarflareDamageByLevel[1] });
+      if (level >= 3 && context.world.getPlayer()?.activePrayer != null) {
+        context.setProtectionPrayer?.(null);
+      }
+    }
+    return damages;
+  }
+}
 // WIKI: an enemy at half its hitpoints or less gets a healing totem near it,
 // which heals it by 30 % of its hitpoints "every few ticks"; a totem has 1
 // hitpoint and comes again two minutes after it was destroyed or its enemy
@@ -85,7 +161,7 @@ export class WaveModifierEffects {
   constructor(getModifiers) {
     this.getModifiers = getModifiers;
     this.beeRules = registerWithInfernoVisuals(beeSwarmNpcDefinition.register(undefined));
-    this.solarflareDamage = new SolarflareDamage();
+    this.solarflareDamage = new WaveSolarflareDamage();
     this.reset();
   }
   // A new run.
@@ -110,6 +186,13 @@ export class WaveModifierEffects {
   getLabel(npcId) {
     return { bees: "Bee swarm", totem: "Healing totem", solarflare: "Solarflare" }[npcId.split("_")[1]];
   }
+  /** The tiles the orbs of Solarflare stand on in `world`, for the overlays. */
+  getOrbTiles(world) {
+    return world
+      .getNpcs()
+      .filter((npc) => solarflareNpcDefinition.isActor(npc) && npc.alive)
+      .map((orb) => [...orb.position]);
+  }
   /** The tiles under molten sand, for the scene. */
   getSandTiles() {
     return [...this.sand.keys()].map((key) => key.split(",").map(Number));
@@ -117,9 +200,9 @@ export class WaveModifierEffects {
 
   // Called when the monsters of a wave are placed. Sol's module has the
   // swarms appear 8 ticks into his fight and the orbs 3 ticks into it.
-  // inferred for the waves: a swarm or an orb that a modifier asks for
-  // appears with the monsters of the next wave and stays through the waves
-  // after it; a higher level of Solarflare replaces the orb.
+  // inferred for the waves: a swarm or the orbs that a modifier asks for
+  // appear with the monsters of the next wave and stay through the waves
+  // after it; a higher level of Solarflare replaces the orbs.
   placeForWave(context, random) {
     const { bees = 0, solarflare = 0 } = this.getModifiers();
     if (bees > this.swarms) {
@@ -136,7 +219,9 @@ export class WaveModifierEffects {
       for (const orb of context.world.getNpcs().filter(solarflareNpcDefinition.isActor)) {
         context.despawnNpc(orb.id);
       }
-      context.spawnNpc(createSolarflareOrb({ id: `colosseum_solarflare_${solarflare}`, corners: solarflareCorners, tier: solarflare, spawnTick: context.tick, firstStepTick: context.tick + 1 }));
+      for (const [index, corners] of solarflareRings.entries()) {
+        context.spawnNpc(createSolarflareOrb({ id: `colosseum_solarflare_${solarflare}_${index}`, corners, tier: solarflare, spawnTick: context.tick, firstStepTick: context.tick + 1 }));
+      }
       this.orbLevel = solarflare;
     }
   }
@@ -235,9 +320,8 @@ export class WaveModifierEffects {
       damages.push(...this.beeRules.resolveLocalEffects(swarm, context));
     }
     if (solarflare) {
-      const orbIds = npcs.filter(solarflareNpcDefinition.isActor).map((orb) => orb.id);
-      const orbMovements = [...(context.npcMovements?.values() ?? [])].filter((movement) => orbIds.includes(movement.npcId));
-      damages.push(...this.solarflareDamage.resolveTick(context, orbMovements, solarflare));
+      const orbs = npcs.filter(solarflareNpcDefinition.isActor);
+      damages.push(...this.solarflareDamage.resolveTick(context, orbs, [...(context.npcMovements?.values() ?? [])], solarflare));
     }
     if (totemic) {
       this.tendTotem(context, monsters);

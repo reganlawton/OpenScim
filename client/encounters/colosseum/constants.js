@@ -45,6 +45,16 @@ export const waveSpawnPoints = [
   [44, 37],
   [44, 32],
 ];
+// The two south spawn points. WIKI (strategy page): a "double south" is a
+// wave with monsters on both, which a player at the north-west pillar is to
+// deal with. Which points they are is from the RuneLite ground markers that
+// the application's preset "Colosseum Tiles" imports: its south A (30,32)
+// and B (33,28) stand inside the footprints of these two, the near and the
+// far south spawn.
+// A is the near one (from the north-west pillar), B the far one, as the
+// strategy page and the preset name them.
+export const southSpawns = { a: [29, 31], b: [32, 27] };
+export const southSpawnPoints = Object.values(southSpawns);
 // SIM: a spawn point this near the player's tile (in steps; a diagonal step
 // counts as one) is not used. The player's tile is the one he stands on one
 // tick before the monsters are placed.

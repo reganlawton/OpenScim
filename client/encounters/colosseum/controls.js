@@ -6,6 +6,27 @@ import { canSpawnWave } from "./waves.js";
 
 export const colosseumStartWaveKey = "colosseumStartWave";
 export const colosseumModifierChoiceKey = "colosseumModifierChoice";
+// The practice switches of the south spawns A and B (waves.js). The labels
+// are the colloquial names of WIKI's table of enemies: Shaman, Ranger,
+// Manti, Shocker ("Mager" is both the shaman's and the shocker's).
+export const colosseumSouthKeys = { a: "colosseumSouthA", b: "colosseumSouthB" };
+const southChoices = [
+  { value: "random", label: "Random" },
+  { value: "any", label: "Any monster" },
+  { value: "shaman", label: "Shaman (serpent shaman)" },
+  { value: "javelin", label: "Ranger (javelin colossus)" },
+  { value: "manticore", label: "Manti (manticore)" },
+  { value: "shockwave", label: "Shocker (shockwave colossus)" },
+];
+/** What the mechanics ask to stand on the south spawn `slot` ("a" or "b"): a value of southChoices, "random" for anything else. */
+export function getSouthSpawnSetting(mechanics, slot) {
+  const value = mechanics?.[colosseumSouthKeys[slot]];
+  return southChoices.some((choice) => choice.value === value) ? value : "random";
+}
+// The practice of a wave (ColosseumEncounter.planPracticeRestart): the same
+// wave again with the same spawns, or with new ones.
+export const retryWaveCommandType = "retry-wave";
+export const rerollWaveCommandType = "reroll-wave";
 // The waves a run can start on: those whose monsters are all in
 // colosseumMonsters.
 const startWaves = Array.from({ length: lastWave - firstWave + 1 }, (unusedElement, index) => firstWave + index).filter((wave) =>
@@ -24,6 +45,7 @@ export const overlayKeys = {
   volatilityReminder: "colosseumVolatilityReminder",
   splits: "colosseumSplitsOverlay",
   losLinks: "colosseumLosLinks",
+  solarflareTrueTile: "colosseumSolarflareTrueTile",
 };
 const overlayToggles = [
   {
@@ -43,6 +65,10 @@ const overlayToggles = [
   { key: overlayKeys.volatilityReminder, label: "Volatility Reminder", default: false, info: "Marks for 5 ticks where a monster died, while Volatility is active. (Fortis Colosseum.)" },
   { key: overlayKeys.splits, label: "Splits Overlay", default: false, info: "The duration of each completed wave and the total. (Fortis Colosseum.)" },
   { key: overlayKeys.losLinks, label: "LoS Links", default: false, info: "Links that open los.colosim.com with the wave's spawns, its reinforcements or the current positions. (Fortis Colosseum.)" },
+  // Not the plugin's: the orb's model glides from tile to tile, so where it
+  // is drawn is not where it hits (RuneLite's True Tile does the same for the
+  // player).
+  { key: overlayKeys.solarflareTrueTile, label: "Solarflare True Tile", default: false, info: "Marks the tile the Solarflare orb is really on. Its model glides between tiles, and it hits from this tile." },
 ].map((toggle) => ({ ...toggle, group: "aid" }));
 
 /**
@@ -66,6 +92,8 @@ export function buildColosseumControls() {
       // A choice's value is a string, as the Inferno's start wave is.
       [colosseumStartWaveKey]: String(startWaves[0]),
       [colosseumModifierChoiceKey]: true,
+      [colosseumSouthKeys.a]: "random",
+      [colosseumSouthKeys.b]: "random",
       ...Object.fromEntries(overlayToggles.map((toggle) => [toggle.key, toggle.default])),
     },
     mechanicsToggles: [
@@ -82,8 +110,27 @@ export function buildColosseumControls() {
         setup: true,
         info: "As in the game: click Minimus to start, and choose one of three modifiers before every wave. Switched off, the waves follow each other by themselves with the modifiers of the set-up. Applies from your next attempt.",
       },
+      {
+        key: colosseumSouthKeys.a,
+        label: "South spawn A (near)",
+        setup: true,
+        choices: southChoices,
+        info: "Practice: what spawns on the near south spawn, the one the south A tile of Colosseum Tiles stands in. With B set too it is a double south, such as a Shaman or a Shocker (both called mager) in front on A with a Ranger behind on B, or a Manti on A or B with a Ranger or a mager. A monster the wave does not have is left to chance. Applies from your next attempt; Retry Wave and Random Spawns keep it.",
+      },
+      {
+        key: colosseumSouthKeys.b,
+        label: "South spawn B (far)",
+        setup: true,
+        choices: southChoices,
+        info: "Practice: what spawns on the far south spawn, the one the south B tile of Colosseum Tiles stands in. Applies from your next attempt.",
+      },
       ...overlayToggles.map(({ default: unusedDefault, ...toggle }) => toggle),
     ],
-    debugActions: [],
+    // As the Inferno's: the wave being fought, again from where the player
+    // stood as its monsters were placed, with its spawns or with new ones.
+    debugActions: [
+      { command: { encounter: "colosseum", type: retryWaveCommandType }, label: "Retry Wave" },
+      { command: { encounter: "colosseum", type: rerollWaveCommandType }, label: "Random Spawns" },
+    ],
   };
 }

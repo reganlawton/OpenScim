@@ -14,6 +14,7 @@
 //     for 5 ticks, where the plugin draws Volatility's picture over them
 //   - the splits: the duration of each completed wave and the total
 //   - the LoS links (losLinks.js)
+// and one of its own, the true tile of the Solarflare orb.
 // Its loot and LiveSplit parts have nothing here to attach to, and the bee
 // swarms' line of the waves overlay, off by default there, is left out.
 //
@@ -32,6 +33,10 @@ const names = { warband: "Fremmy", shaman: "Mage", jaguar: "Melee", javelin: "Ra
 const colors = { title: "#ff981f", spawn: "#ffffff", reinforcement: "#ffff00" };
 // inferred: the colour of the tiles of the Volatility reminder.
 const reminderMarker = { color: "#FF981F", opacity: 1 };
+// inferred: the colour of the Solarflare orb's true tile, chosen to stand
+// apart from fire, molten sand and the cyan and yellow A and B tiles of the
+// preset "Colosseum Tiles".
+const orbMarker = { color: "#FF3333", opacity: 1 };
 const secondsPerTick = 0.6;
 
 const style = `
@@ -107,11 +112,16 @@ function rightHtml(state, mechanics) {
 
 let panels = null;
 let drawn = "";
+// The panels' html, made again only for another snapshot or other toggles:
+// the snapshot (ColosseumEncounter.getSnapshot) is a new object whenever it
+// changes, and the scene is handed the same one frame after frame.
+let made = { state: null, mechanics: null, html: null };
 
 function removePanels() {
   panels?.forEach((panel) => panel.remove());
   panels = null;
   drawn = "";
+  made = { state: null, mechanics: null, html: null };
 }
 
 /**
@@ -126,7 +136,10 @@ export function syncOverlays(simulationState) {
     removePanels();
     return;
   }
-  const html = [leftHtml(state, mechanics), rightHtml(state, mechanics)];
+  if (made.state !== state || made.mechanics !== mechanics) {
+    made = { state, mechanics, html: [leftHtml(state, mechanics), rightHtml(state, mechanics)] };
+  }
+  const html = made.html;
   const scale = getGamePanelScale();
   const key = html.join("\u0000") + scale;
   if (key === drawn) {
@@ -146,7 +159,8 @@ export function syncOverlays(simulationState) {
 
 /**
  * The scene's input of a frame with what the overlays draw on the ground
- * added to its markers: the Volatility reminder, as tile markers. The scene
+ * added to its markers: the Volatility reminder and the Solarflare orb's
+ * true tile, as tile markers. The scene
  * draws the player's own markers only when he has them shown; that stays so.
  */
 export function withOverlayMarkers(input) {
@@ -155,12 +169,14 @@ export function withOverlayMarkers(input) {
   if (!state || !mechanics) {
     return input;
   }
-  const tiles =
-    getOverlaySetting(mechanics, overlayKeys.volatilityReminder) && state.modifiers?.volatility
+  const tiles = [
+    ...(getOverlaySetting(mechanics, overlayKeys.volatilityReminder) && state.modifiers?.volatility
       ? (state.deaths ?? []).flatMap(({ position: [x, y], size }) =>
           Array.from({ length: size * size }, (unusedElement, index) => ({ x: x + (index % size), y: y + Math.floor(index / size), ...reminderMarker })),
         )
-      : [];
+      : []),
+    ...(getOverlaySetting(mechanics, overlayKeys.solarflareTrueTile) ? (state.orbTiles ?? []).map(([x, y]) => ({ x, y, ...orbMarker })) : []),
+  ];
   if (tiles.length === 0) {
     return input;
   }

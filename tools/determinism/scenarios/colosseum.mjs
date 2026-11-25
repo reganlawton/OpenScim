@@ -12,8 +12,8 @@
 // its monsters is left, and the next one is placed 8 ticks later; after
 // wave 11 the run is won 3 ticks after the wave is completed.
 import { attack, command, magicGear, protect, rangedGear } from "./common.mjs";
-import { buildReinforcementSpawns, buildWaveSpawns } from "../../../client/encounters/colosseum/waves.js";
-import { colosseumMonsters, spawnPointExclusionDistance, waveSpawnPoints } from "../../../client/encounters/colosseum/constants.js";
+import { buildReinforcementSpawns, buildWaveSpawns, getWaveMonsterKinds } from "../../../client/encounters/colosseum/waves.js";
+import { colosseumMonsters, southSpawns, spawnPointExclusionDistance, waveSpawnPoints } from "../../../client/encounters/colosseum/constants.js";
 
 const KIND = "colosseum";
 /** Mechanics without Minimus and his offers: a run starts with its first wave, and a wave follows a wave. */
@@ -79,6 +79,81 @@ function spawnAllocation() {
   return rows;
 }
 
+// The practice switches of the south spawns A and B (waves.js), for four seeds, every wave and three player tiles,
+// with A and B each random, any, or each kind the wave has. Five things must hold of each, or the scenario throws:
+// both random is the game's wave; the warband stands where it stands without the switches; a kind asked for stands
+// on its point, and "any" puts a monster there, unless the point is near the player or no monster is left for it;
+// no two monsters share a point; the wave has as many monsters as without them.
+function southSpawnPresets() {
+  const isAt = (spawn, point) => spawn.position[0] === point[0] && spawn.position[1] === point[1];
+  const rows = [];
+  for (const seed of [1, 2, 77, 4000000000]) {
+    for (let wave = 1; wave <= 11; wave++) {
+      const kinds = [...new Set(getWaveMonsterKinds(wave))];
+      const settings = ["random", "any", ...kinds];
+      for (const playerTile of [START, [29, 34], [32, 30]]) {
+        const plain = buildWaveSpawns(seed, wave, playerTile);
+        for (const a of settings) {
+          for (const b of settings) {
+            const practised = buildWaveSpawns(seed, wave, playerTile, {}, { south: { a, b } });
+            const monsters = practised.slice(3);
+            const onPoint = (point) => monsters.find((spawn) => isAt(spawn, point));
+            const available = (point) => steps(point, playerTile) > spawnPointExclusionDistance;
+            // What can be met: A first among kinds, so B's kind needs a monster A did not take.
+            const counts = Object.fromEntries(kinds.map((kind) => [kind, getWaveMonsterKinds(wave).filter((other) => other === kind).length]));
+            if (kinds.includes(a) && available(southSpawns.a)) counts[a]--;
+            const metA = a === "random" || !available(southSpawns.a) || (a === "any" ? onPoint(southSpawns.a) : onPoint(southSpawns.a)?.kind === a);
+            const bPossible = available(southSpawns.b) && (b === "any" ? monsters.length > (a === "random" ? 0 : 1) : (counts[b] ?? 0) > 0);
+            const metB = b === "random" || !bPossible || (b === "any" ? onPoint(southSpawns.b) : onPoint(southSpawns.b)?.kind === b);
+            const checks = [
+              a !== "random" || b !== "random" || JSON.stringify(plain) === JSON.stringify(practised),
+              JSON.stringify(plain.slice(0, 3)) === JSON.stringify(practised.slice(0, 3)),
+              metA && metB,
+              new Set(monsters.map((spawn) => spawn.position.join())).size === monsters.length,
+              monsters.length === plain.length - 3,
+            ];
+            if (checks.includes(false)) throw new Error(`colosseum/south-spawn-presets: a check failed for ${JSON.stringify({ seed, wave, playerTile, a, b, checks, practised })}`);
+            if (playerTile === START) rows.push({ seed, wave, a, b, south: [onPoint(southSpawns.a)?.kind ?? null, onPoint(southSpawns.b)?.kind ?? null] });
+          }
+        }
+      }
+    }
+  }
+  return rows;
+}
+
+// The practice commands "Retry Wave" and "Random Spawns", asked of an encounter the engine made. Wave 5 has begun
+// with Quartet, the player stood at 30,35 before its monsters were placed, and Volatility was chosen since. Both
+// plans restart on wave 5 from 30,35 with Quartet alone; "Retry Wave" keeps the seed, "Random Spawns" draws another
+// (which is not digested: Math.random). A run reset with the plan's seeds has that seed and those modifiers, and
+// gives them back as its seeds. Any other command has no plan.
+function practiceRestart(engine, objTypeLoader) {
+  const { encounter } = engine.createSimulationEngine({
+    encounterConfig: { kind: KIND, mechanics: {} }, objTypeLoader, combatSeed: 1,
+    inventory: engine.createEmptyInventory(), equipment: {}, combatSupplies: engine.createEmptyCombatSupplies(), attackStylePerCategory: {},
+  });
+  encounter.encounterSeed = 1234;
+  encounter.wave = 5;
+  encounter.modifiersAtWaveStart = { quartet: 1 };
+  encounter.playerTileBeforePlacing = [30, 35];
+  encounter.setModifiers({ quartet: 1, volatility: 1 });
+  const retry = encounter.planPracticeRestart({ encounter: KIND, type: "retry-wave" });
+  const reroll = encounter.planPracticeRestart({ encounter: KIND, type: "reroll-wave" });
+  const other = encounter.planPracticeRestart({ encounter: KIND, type: "talk-to-minimus" });
+  encounter.reset(retry.encounterSeeds);
+  const afterReset = { seeds: encounter.getSeeds(), modifiers: { ...encounter.modifiers } };
+  const { encounterSeed: unusedSeed, ...rerollSeeds } = reroll.encounterSeeds;
+  const rows = { retry, reroll: { ...reroll, encounterSeeds: rerollSeeds }, other, afterReset };
+  const checks = {
+    retry: JSON.stringify(retry) === JSON.stringify({ encounterSeeds: { encounterSeed: 1234, modifiers: { quartet: 1 } }, runMechanics: { colosseumStartWave: "5" }, startPosition: [30, 35] }),
+    reroll: Number.isInteger(reroll.encounterSeeds.encounterSeed) && reroll.encounterSeeds.encounterSeed >= 0 && reroll.encounterSeeds.encounterSeed < 2 ** 32 && JSON.stringify(rerollSeeds) === JSON.stringify({ modifiers: { quartet: 1 } }) && reroll.runMechanics.colosseumStartWave === "5",
+    other: other === null,
+    afterReset: afterReset.seeds.encounterSeed === 1234 && JSON.stringify(afterReset.modifiers) === JSON.stringify({ quartet: 1 }) && JSON.stringify(afterReset.seeds.modifiers) === JSON.stringify({ quartet: 1 }),
+  };
+  if (Object.values(checks).includes(false)) throw new Error(`colosseum/practice-restart: a check failed: ${JSON.stringify({ checks, rows })}`);
+  return rows;
+}
+
 /** The player's choice of what Minimus offers: 0, 1 or 2. */
 const choose = (api, choice) => command(api, { encounter: KIND, type: "choose-modifier", choice });
 /** A click on Minimus. */
@@ -124,6 +199,8 @@ function modifierOffers(engine, objTypeLoader) {
 export const scenarios = [
   { name: "colosseum/spawn-allocation", pure: spawnAllocation },
   { name: "colosseum/modifier-offers", pure: modifierOffers },
+  { name: "colosseum/south-spawn-presets", pure: southSpawnPresets },
+  { name: "colosseum/practice-restart", pure: practiceRestart },
   {
     // Minimus and his offers, through wave 1 into wave 2. He stands at 32,34 from tick 1. A click on him on tick 3
     // opens his offer (Blasphemy, Relentless, Frailty) and the first is chosen on tick 6: he is gone on that tick and
@@ -156,15 +233,16 @@ export const scenarios = [
   {
     // The ten modifiers that are also Sol Heredit's, all chosen in the set-up, without Minimus, through wave 1 into
     // wave 2. Placed with the wave on tick 5: a second berserker one tile south-east of the archer (Quartet), two bee
-    // swarms (Bees! II) and the orb at 23,25 (Solarflare I), whose round takes it over the start tile. The player has
-    // infinite health, stands on the start tile, prays against magic and from tick 21 shoots: a totem first, then the
-    // shaman, the warband and the jaguar. Every hit that hurts him adds a stack of Doom, past the 15 that would kill
-    // him without infinite health. The shaman is down to half its hitpoints on tick 34: a totem appears beside it at
-    // 27,31 (Totemic) and is destroyed on tick 39. His prayer has run out on tick 47 (Blasphemy II takes 40 % of the
-    // damage he is dealt from it), and the spells hurt from then. A swarm has poisoned him by tick 61. The jaguar
-    // comes on tick 71 and claws for up to 53 (47 and 6 more, Relentless III). It dies beside him on tick 153, is
-    // gone after tick 156 and explodes on tick 157 for 19 (Volatility II), the tick the wave is completed on, 1:31
-    // after it was placed. Wave 2 is placed on tick 165 with a second seer; its shaman gets a totem on tick 184.
+    // swarms (Bees! II) and an orb on the ring round each pillar (Solarflare I), none of which comes near the start
+    // tile. The player has infinite health, stands on the start tile, prays against magic and from tick 21 shoots: a
+    // totem first, then the shaman, the warband and the jaguar. Every hit that hurts him adds a stack of Doom, past the
+    // 15 that would kill him without infinite health. A swarm has poisoned him by tick 33. The shaman is down to half
+    // its hitpoints by tick 39: a totem appears beside it at 27,31 (Totemic) and is destroyed on tick 44. His prayer
+    // has run out on tick 47 (Blasphemy II takes 40 % of the damage he is dealt from it), and the spells hurt from
+    // then. The jaguar comes on tick 71 and claws for up to 53 (47 and 6 more, Relentless III). It dies beside him on
+    // tick 138, is gone after tick 141 and explodes on tick 142 for 20 (Volatility II), the tick the wave is completed
+    // on, 1:22 after it was placed. Wave 2 is placed on tick 150 with a second seer; its shaman gets a totem on tick
+    // 169.
     name: "colosseum/modifiers-of-the-set-up",
     kind: KIND,
     seed: 71,
@@ -334,6 +412,67 @@ export const scenarios = [
         if (api.player().attackTarget !== null) attack(api, null);
         api.moveTo(javelin.position[0] - 6, javelin.position[1] + 1);
       }
+    },
+  },
+  {
+    // Solarflare I, wave 1. An orb circles each pillar on the tiles touching it, placed with the wave on tick 5; the
+    // south-west pillar's starts at 23,25 and steps north every second tick. At level I an orb hits only on its second
+    // tick on a tile (the wiki's "Solarflare skip"). The player waits on 23,27; the orb arrives there on tick 8 and he
+    // steps ahead of it to 23,28 on the same tick: no hit. It arrives on 23,28 on tick 10 and he is still there on
+    // tick 11, its second: a hit of 10 to 20 on tick 12, as he steps away to 21,28. The orb rests at the corner 23,29
+    // from tick 12 to 18; he stands on it from tick 14, after its second tick, and leaves on tick 17: no hit. Every
+    // tick the snapshot's orbTiles, which the overlay Solarflare True Tile marks, are the orbs' tiles, or the scenario
+    // throws.
+    name: "colosseum/solarflare-contact",
+    kind: KIND,
+    seed: 81,
+    ticks: 30,
+    mechanics: { ...noMinimus, infiniteHealth: true },
+    ...modifiers({ solarflare: 1 }),
+    ...rangedGear,
+    script(tick, api) {
+      // The overlay's true tiles (overlays.js) are the orbs' own tiles, every tick.
+      const orbTiles = api.npcs().filter((npc) => npc.id.startsWith("colosseum_solarflare_")).map((orb) => orb.position.join(","));
+      if (seen(api).orbTiles.map((tile) => tile.join(",")).join(" ") !== orbTiles.join(" ")) throw new Error(`orbTiles on tick ${tick}`);
+      if (tick === 1) api.moveTo(23, 27);
+      if (tick === 8) api.moveTo(23, 28);
+      if (tick === 12) api.moveTo(21, 28);
+      if (tick === 14) api.moveTo(23, 29);
+      if (tick === 17) api.moveTo(21, 29);
+    },
+  },
+  {
+    // Solarflare III, wave 1. The orbs step every tick. The player stands on 23,28 with Protect from Magic up: the
+    // south-west pillar's orb steps onto him on tick 8 and off him on tick 9, one contact, which turns his prayer off
+    // and hits him on tick 9 for 20 to 30.
+    name: "colosseum/solarflare-iii",
+    kind: KIND,
+    seed: 82,
+    ticks: 20,
+    mechanics: { ...noMinimus, infiniteHealth: true },
+    ...modifiers({ solarflare: 3 }),
+    ...rangedGear,
+    script(tick, api) {
+      if (tick === 1) {
+        api.moveTo(23, 28);
+        pray(api, "ProtectMagic");
+      }
+    },
+  },
+  {
+    // Wave 8 with the practice switches set to mage front, range back: a shockwave colossus on south spawn A (29,31)
+    // and a javelin colossus on B (32,27), placed on tick 5, or the scenario throws. The player stands on the start
+    // tile.
+    name: "colosseum/south-presets-wave-8",
+    kind: KIND,
+    seed: 83,
+    ticks: 12,
+    mechanics: { ...noMinimus, infiniteHealth: true, colosseumStartWave: "8", colosseumSouthA: "shockwave", colosseumSouthB: "javelin" },
+    ...rangedGear,
+    script(tick, api) {
+      if (tick !== 6) return;
+      const at = ([x, y]) => monsters(api).find((npc) => npc.position[0] === x && npc.position[1] === y)?.id.split("_")[1];
+      if (at(southSpawns.a) !== "shockwave" || at(southSpawns.b) !== "javelin") throw new Error(`colosseum/south-presets-wave-8: ${at(southSpawns.a)} on A, ${at(southSpawns.b)} on B`);
     },
   },
 ];

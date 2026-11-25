@@ -95,7 +95,7 @@ module's (`../sol-heredit/`), taken over; four exist only in the waves.
 | Relentless | every monster's attack: part of the player's Defence bypassed, a higher max hit, at level III no accuracy roll | WIKI; applied as Sol's module applies it to his warband |
 | Quartet | a fourth warbander of a random role, in the slot south of the player | WIKI. inferred: placed one tile south-east of the archer |
 | Bees! | one to three swarms, Sol's actors and tiles | Sol's module. inferred: they appear with the next wave's monsters and stay |
-| Solarflare | one orb round the four pillars, Sol's actor and damage | WIKI says only that it "circles around the pillars". inferred: its route (corners 23,25, 23,44, 42,44, 42,25) |
+| Solarflare | an orb circles each pillar on the ring of tiles touching it, Sol's actor; at levels I and II it hits a player on its tile on its second tick there, at level III on contact, once a contact; the hit lands a tick later; level III turns the protection prayer off | WIKI: "Pillars are orbited by an orb" that "damages the player on contact", and levels II and III deal more; the strategy page's tips: at I and II "the flare damages only on its second tick". The rings: reported from the game by players, not recorded. inferred: the orbs go clockwise from their ring's south-west corner; the second tick is the only one at a corner where an orb rests; what counts as contact at III; the damage of II and III, 15 to 25 and 20 to 30 (I: Sol's module's 10 to 20) |
 | Totemic | a totem beside a monster at half its hitpoints or less, healing it by 30 %; it comes again two minutes after it was destroyed | WIKI; the timing of the heal is Sol's module's. inferred: one totem at a time |
 | Volatility | a dead monster explodes on the first tick it is gone, one tile round its footprint (two at level II and III); at level III the centre tile is left under molten sand | OBS (level I, 14 deaths: the tick, the tiles, the graphics); WIKI (levels II and III). inferred: the damage, 16 to 25 (two samples: 16 and 25) |
 | Mantimayhem | each orb is two hits; at level II an orb that is not prayed against inflicts venom, cured when the wave ends; at level III the three orbs come in any order | WIKI. The second projectile is not drawn |
@@ -180,6 +180,31 @@ The shockwave colossus (OBS, 14 claps): sound 5774
 sound as the projectile arrives, with no place; the other sounds are those
 of its animations' frames, and a hit on it has none.
 
+## Practice
+
+Not the game's: tools to practise a wave.
+
+- **Retry Wave** and **Random Spawns** (debug actions, `controls.js`)
+  restart the run on the wave being fought, with the modifiers it had as
+  the wave began (with Minimus, those before his offer), the player on the
+  tile he stood on one tick before its monsters were placed. Retry Wave
+  keeps the seed, so a player who stands still until the monsters are
+  placed gets the same spawns; Random Spawns draws a new seed
+  (`ColosseumEncounter.planPracticeRestart`).
+- **South spawn A (near)** and **South spawn B (far)** (set-up choices)
+  say what stands on the two south spawn points, 29,31 (A) and 32,27 (B):
+  Random (the game's draw), Any monster, or one kind, by WIKI's
+  colloquial names: Shaman (serpent shaman), Ranger (javelin colossus),
+  Manti (manticore), Shocker (shockwave colossus); "Mager" is both the
+  shaman's and the shocker's. Both set is a double south: a mager on A
+  and a Ranger on B is "mage front, range back", a Manti on A or B with a
+  Ranger or a mager the "A/B mantis" of the strategy page's A/B offtick. A kind
+  the wave has no monster of, or a point near the player, is left to
+  chance; the other monsters keep the game's shuffled order (`waves.js`).
+  The wiki's strategy page speaks of south spawns without naming them;
+  the RuneLite ground markers of the preset "Colosseum Tiles" mark them
+  with their south A (30,32) and B (33,28).
+
 ## Where the sources differ
 
 | What | One says | The other says | The code |
@@ -260,10 +285,11 @@ What a recording would settle, in the order it matters:
   drawn and do nothing. The recording has the rewards interface (864)
   widget by widget.
 - The modifiers in a recording: only Blasphemy and Volatility I were
-  recorded. Solarflare's route, Quartet's place, the second colossus of
+  recorded. The orbs' starting corners and direction, Quartet's place, the second colossus of
   Dynamic Duo, a totem, molten sand and its damage, Mantimayhem's second
   projectile and Bees! in the waves are to be observed.
-- A panel with the wave and a "retry wave" button, as the Inferno has.
+- A panel with the wave, as the Inferno has. ("Retry Wave" and "Random
+  Spawns" are debug actions; see "Practice".)
 - What a dead monster leaves when the modifier Volatility is on (the NPCs
   the cache calls `colosseum_human_gib`, `..._manticore_gib` and
   `..._colossi_gib`).

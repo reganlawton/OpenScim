@@ -99,7 +99,7 @@ try {
     drawn: true,
     notDrawable: 0,
     hitsLanded: true,
-    snapshot: { wave: 1, phase: "active", modifiers: { blasphemy: 1 }, doomStacks: 0, offer: null, sand: [] },
+    snapshot: { wave: 1, phase: "active", modifiers: { blasphemy: 1 }, doomStacks: 0, offer: null, sand: [], orbTiles: [] },
     // No wave is completed and nothing has died; the LoS tool has the wave's spawns and the positions now.
     overlays: { splits: [], deaths: [], losLinks: ["spawns", "current"] },
   });

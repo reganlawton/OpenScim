@@ -96,16 +96,35 @@ need a line past them.
 
 Step 1 has "Fight this arena's boss with all its mechanics" in the arenas
 that have one (`hostKind` in `arenas.js`): Sol Heredit's arena, Yama's room,
-Zebak's room, Vardorvis' clearing and both rooms of the Doom of Mokhaiotl.
+Zebak's room, Vardorvis' clearing, both rooms of the Doom of Mokhaiotl,
+Duke Sucellus' asylum and the Leviathan's Scar (its bridge is the arena's
+own, `arenaConfig`, and Duke's ice is added to the map's, `refineArena`,
+with or without the boss).
 The scenario's `options.bossMechanics` then makes the arena's own encounter
 the sandbox's host (`encounter.js`): it is made by its own factory and runs
 inside the sandbox with everything it has (attacks, phases, hazards, adds,
 its engine rules, its debug actions and boss hitpoint controls in the
 Practice panel), and its scene is the one the fight has
 (`presentationOf(kind)`, a seam in `assets/rendering.js`, reaches the scenes
-that live in the bundle). The scenario's monsters fight beside it; in "ffa"
-the host's NPCs are one team, "boss". The run is won when the host's fight
-is won and the scenario's monsters are beaten. "Two Suns" is the real Sol
+that live in the bundle). The scenario's monsters fight beside it. The run is won when the host's
+fight is won and the scenario's monsters are beaten.
+
+In "ffa" the host's NPCs are one team: their own ("boss"), or the one
+`options.bossTeam` names (step 1, "Boss team"; `player` to fight for the
+player, who then cannot attack it). The boss shows on step 2's map where its fight puts it
+(the snapshot's `sandbox.bosses`), dashed: it cannot be moved, and a right
+click gives it the next team. The boss fights the nearest enemy, a
+monster or the player, with its own mechanics: each of the host's hooks that
+acts is handed a world whose player is that enemy (`hostContext`), seen with
+a player's fields in neutral and as the tile of its body nearest the boss
+(`playerView`), and the host's NPCs that aimed at the player aim at it
+(`aimHost`); its attacks are rolled with the
+enemy's own stats, and what would land on the player's tile lands on it as a
+hit of the boss (`strikeFocus`). With no enemy left it rests. Duke Sucellus
+and Vardorvis, who wait for the player in their fights, start at once
+(`wakeBoss`). The host's boss is then one of the teams for the victory, and
+the host may not take away the scenario's own NPCs (the Doom clears his room
+as he dies). "Two Suns" is the real Sol
 Heredit and a second one of the sandbox's.
 
 One host per arena, where its fight puts it: a boss's mechanics are written
@@ -134,8 +153,22 @@ other.
 
 - Every monster placed from the catalog has one behaviour (`brawler.js`):
   walk to the target (with the route search around obstacles), attack with
-  whichever of its attacks reaches, wait its attack speed. Their full
-  mechanics are those of the arena's host only (above). A boss from the
+  whichever of its attacks reaches, wait its attack speed. A boss's full
+  mechanics are those of the arena's host only (above). What the monsters do
+  besides, from their own fights (`inferno/sandbox.js` and the rest name the
+  numbers): below half his hitpoints JalTok-Jad calls five healers
+  (`summons`), who walk to him and heal him 10 every 4 ticks until something
+  hits them (`supports`); his melee comes every 4 ticks. TzKal-Zuk calls Jad
+  (with three healers) below 40 % and his four healers below 20 %, who heal
+  him 15 to 24 from where they stand and throw sparks at whoever hits them.
+  A monster whose target is being healed goes for the healers first, one at
+  a time. The blob attacks with a style the player's prayer does not cover
+  (`readsPrayer`) and splits into its three children as it dies
+  (`splitsInto`); the mager, one attack in ten, brings back a dead monster
+  of its side at half its hitpoints (`revives`); the meleer digs when it has
+  not attacked for 20 ticks and comes up beside its target (`digs`);
+  Vardorvis heals half of what his hits deal (`healsFromDamage`), with a
+  heal hitsplat. A boss from the
   catalog keeps its look and the shape of its attacks: JalTok-Jad winds up
   for three ticks and throws his three-part magic or his ranged boulder (the
   style to pray against shows in the animation, but he picks it at random),
@@ -163,6 +196,9 @@ other.
   that no prayer stops, 7 or 6 ticks between attacks. His triple attack,
   grapple and phases, Yama's fireballs or Vardorvis' axes come only with
   the host.
+- In a free-for-all a host boss's mechanics are aimed at one enemy at a
+  time; its specials that strike the whole room (Sol's, Yama's) strike only
+  that one.
 - The catalog is the monsters whose models and sequences the trimmed cache
   already holds and whose stats are in the monster table
   (`client/data/monsters.js`). Its bosses: Sol Heredit, Yama, Vardorvis, the

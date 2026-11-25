@@ -10,15 +10,21 @@
 // of it. The view's own listeners are on its canvas, which is not an ancestor
 // of the layer: what the layer does not take reaches none of them.
 
+// The view found last: asked for every frame, it is looked up again only once
+// the application has taken it off the page (it makes the view anew).
+let cachedView = null;
+
 /** The game view, or null when there is none. */
 export function gameView() {
-  return document.querySelector(".scene-viewport");
+  if (!cachedView?.isConnected) cachedView = document.querySelector(".scene-viewport");
+  return cachedView;
 }
 
 /** Puts `element` on the view, `zIndex` above its canvas, unless it is already there. Returns the view, or null. */
 export function mountOnView(element, zIndex) {
   const view = gameView();
   if (!view) return null;
+  if (element.parentElement === view && element.style.zIndex === String(zIndex)) return view;
   element.style.position = "absolute";
   element.style.left = "0";
   element.style.top = "0";

@@ -78,5 +78,18 @@ for (const sample of [0,0.99]) {
   assert.equal(drops.filter(d => d.kind === "jug").length,5);
   assert.ok(drops.every(d => d.kind !== "rock"));
   assert.equal(new Set(drops.map(d => key(d.position))).size,drops.length);
+  // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 150, 302 and 422): the waves' five jugs fall on
+  // (26,32), (27,32), (30,25), (31,26) and (33,38).
+  assert.deepEqual(drops.filter(d => d.kind === "jug").map(d => key(d.position)), ["26,32","27,32","30,25","31,26","33,38"]);
+}
+// OBS (same recording, ticks 150, 302, 363, 422, 545): rocks fly as 2172, jugs as 2173, a pool that spreads
+// as 1555 and a single pool as 2194.
+for (const [kind, iteration] of [["roar",0],["roar",1],["waves",0]]) for (const sample of [0,0.4,0.99]) {
+  const drops = specialDrops(kind,iteration,() => sample,arena);
+  for (const drop of drops) {
+    const flies = drop.kind === "rock" ? 2172 : drop.kind === "jug" ? 2173 : drop.spread ? 1555 : 2194;
+    assert.equal(drop.spotAnimId, flies);
+  }
+  assert.ok(drops.some(d => d.spotAnimId === 1555) && drops.some(d => d.spotAnimId === 2194));
 }
 console.log("All five roar layouts had jug solves across 768 default/Upset Stomach samples; both wave layouts placed five jugs.");

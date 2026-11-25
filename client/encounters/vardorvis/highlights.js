@@ -69,19 +69,24 @@ export function drawHulls(scene, camera, npcs) {
   const viewport = gameView();
   const heads = (npcs ?? []).filter((npc) => npc.alive && hullNpcTypeIds.has(npc.npcTypeId));
   if (!viewport || !camera?.Hb || heads.length === 0) {
-    if (hullCanvas) hullCanvas.style.display = "none";
+    if (hullCanvas && hullCanvas.style.display !== "none") hullCanvas.style.display = "none";
     return;
   }
   if (!hullCanvas) {
     hullCanvas = document.createElement("canvas");
     hullCanvas.style.pointerEvents = "none";
   }
-  // Again each frame: the application may have made the view anew.
-  mountOnView(hullCanvas, hullZIndex);
-  // In the view's own pixels; its canvas's are as many as it covers on the screen.
+  // In the view's own pixels; its canvas's are as many as it covers on the
+  // screen. Read before anything here is written, so that the reads do not
+  // lay the page out again; and written only where it changed.
   const width = viewport.clientWidth, height = viewport.clientHeight;
   const dpr = (window.devicePixelRatio || 1) * viewPageScale(viewport).x;
-  Object.assign(hullCanvas.style, { display: "block", width: width + "px", height: height + "px" });
+  // Again each frame: the application may have made the view anew.
+  mountOnView(hullCanvas, hullZIndex);
+  const style = hullCanvas.style;
+  if (style.display !== "block") style.display = "block";
+  if (style.width !== width + "px") style.width = width + "px";
+  if (style.height !== height + "px") style.height = height + "px";
   if (hullCanvas.width !== Math.round(width * dpr)) hullCanvas.width = Math.round(width * dpr);
   if (hullCanvas.height !== Math.round(height * dpr)) hullCanvas.height = Math.round(height * dpr);
   const context = hullCanvas.getContext("2d");

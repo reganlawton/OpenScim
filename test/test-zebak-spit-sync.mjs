@@ -64,17 +64,24 @@ try {
       enc.random = () => magic ? 0.2 : 0.8;
       if (enrage && !enc.phases.enraged) engine.setBossHp(100);
       window.shot = {
-        intact: magic ? (enrage ? 2177 : 2176) : (enrage ? 2179 : 2178),
-        fragment: magic ? 2181 : 2182, sequence: enrage ? 9626 : 9624,
+        // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 618-705): at path level 0 the enraged
+        // spit is the normal animation and pot; the ranged pot's one piece is 2187 (e.g. tick 116).
+        intact: magic ? (enrage && path >= 4 ? 2177 : 2176) : (enrage && path >= 4 ? 2179 : 2178),
+        fragment: magic ? 2181 : 2187, sequence: enrage && path >= 4 ? 9626 : 9624,
         after: (engine.worldState.tick + 4) * 30,
       };
     },{enrage,path,magic});
     await page.waitForFunction(() => shot.endpoint && shot.moved, null, {timeout: 20000});
     const {jaw,moved,endpoint,finalTarget} = await page.evaluate(() => shot);
     const [x,y,z] = jaw.source;
-    assert.ok(Math.abs(jaw.frame - (enrage ? 32 : 66)) <= 6, JSON.stringify(jaw));
-    assert.ok(jaw.upper[2] - jaw.lower[2] > 0.7 && z > jaw.lower[2] && z < jaw.upper[2], JSON.stringify(jaw));
-    assert.ok(Math.hypot(x-(jaw.upper[0]+jaw.lower[0])/2, y-(jaw.upper[1]+jaw.lower[1])/2) < 0.7);
+    assert.ok(Math.abs(jaw.frame - (enrage && path >= 4 ? 32 : 66)) <= 6, JSON.stringify(jaw));
+    if (path >= 4) {
+      assert.ok(jaw.upper[2] - jaw.lower[2] > 0.7 && z > jaw.lower[2] && z < jaw.upper[2], JSON.stringify(jaw));
+      assert.ok(Math.hypot(x-(jaw.upper[0]+jaw.lower[0])/2, y-(jaw.upper[1]+jaw.lower[1])/2) < 0.7);
+    } else {
+      // OBS (same recording, all 77 spits): the pot starts over the tile 7 east and 4 north of his south-west tile.
+      assert.ok(Math.hypot(x - 21.5, y - 32.5) < 0.05, JSON.stringify(jaw));
+    }
     assert.deepEqual(moved,[28.5,30.5]);
     assert.deepEqual(finalTarget,[32.5,35.5]);
     assert.ok(Math.hypot(endpoint[0]-32.5,endpoint[1]-35.5) < 0.05, JSON.stringify(endpoint));

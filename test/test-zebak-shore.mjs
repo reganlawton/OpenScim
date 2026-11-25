@@ -29,7 +29,7 @@ try {
     AudioBufferSourceNode.prototype.start = function(when, ...args) {
       const result = start.call(this,when,...args);
       const id = soundIds.get(this.buffer);
-      if (id === 5882 || id === 5880) starts.push({id,when,context:this.context});
+      if (id === 5882 || id === 5843 || id === 1678) starts.push({id,when,context:this.context});
       return result;
     };
   });
@@ -47,7 +47,7 @@ try {
       const effects = [...scene.spotAnimRenderer.activeInstances.values()].filter(fx => fx.spotAnimId === 68);
       const front = engine.encounter.phases.waveFronts[0];
       const age = front && scene.primaryCycle - front.startTick * 30;
-      return effects.length === 8 && front && age >= 6 && age < 20 &&
+      return effects.length === 7 && front && age >= 6 && age < 20 &&
         [...scene.spotAnimRenderer.visibleParts.keys()].some(key => key.startsWith("spotanim-68-frame-")) &&
         {tick:engine.worldState.tick,start:front.startTick,direction:front.direction};
     },null,{polling:"raf"});
@@ -59,11 +59,13 @@ try {
     }
     const played = await page.waitForFunction(() => {
       const rocks = starts.find(s => s.id === 5882);
-      const splash = starts.find(s => s.id === 5880 && s.context.state === "running" && s.context.currentTime >= s.when);
-      return rocks && splash && (splash.when - rocks.when);
+      // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 155, 307, 427): 1678 with the sweep, 5843 200 cycles on.
+      const splash = starts.find(s => s.id === 5843 && s.context.state === "running" && s.context.currentTime >= s.when);
+      const thud = starts.find(s => s.id === 1678);
+      return rocks && thud && splash && Math.abs(thud.when - rocks.when) < 0.08 && (splash.when - rocks.when);
     });
     assert.ok(Math.abs(await played.jsonValue() - 4) < 0.08);
-    console.log("Shore", direction, "showed eight splash effects on the first crest and played the impact at four seconds.");
+    console.log("Shore", direction, "showed seven splash effects on the first crest and played the impact at four seconds.");
   }
   assert.deepEqual(errors,[]);
 } finally {

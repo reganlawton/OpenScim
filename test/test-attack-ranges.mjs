@@ -69,6 +69,39 @@ assert.ok(isAttackDragProtected("far"));
 assert.ok(!isAttackDragProtected("near"));
 assert.ok(!isAttackDragProtected("talker"));
 
+// A tick on which nothing it is made of changed gives the same overlay; a
+// step, a new reach, a new display mode, an NPC coming into reach or a wall
+// put up in the fight gives a new one.
+{
+  const { setArenaConfig } = await import("../client/engine/arena.js");
+  const { createCollisionMap, CollisionFlag } = await import("../client/engine/collision.js");
+  const highlight = { ...base, settings: { ...attackRangesDefaults, npcHighlightEnableState: "ON" } };
+  const first = updateAttackRanges(highlight);
+  assert.equal(updateAttackRanges({ ...highlight, npcs: npcs.map((npc) => ({ ...npc })) }), first);
+  const moved = updateAttackRanges({ ...highlight, playerTile: [11, 10] });
+  assert.notEqual(moved, first);
+  assert.ok(moved.fillTiles.some(([x]) => x === 19));
+  assert.notEqual(updateAttackRanges({ ...highlight, range: 7 }), moved);
+  assert.equal(updateAttackRanges({ ...highlight, range: 7 }).fillTiles.length, 225);
+  const tiles = updateAttackRanges({ ...highlight, settings: { ...highlight.settings, displayMode: "TILES" } });
+  assert.equal(tiles.outlineTiles.length, 289);
+  const reached = updateAttackRanges({ ...highlight, settings: { ...highlight.settings, displayMode: "TILES" }, npcs: [...npcs, { id: "new", role: "minion", alive: true, position: [14, 14], size: 1 }] });
+  assert.notEqual(reached, tiles);
+  assert.deepEqual(reached.npcIds, ["near", "new"]);
+  const map = createCollisionMap(40, 40);
+  setArenaConfig({ bounds: null, walkableTiles: null, collisionMap: map }, true);
+  const open = updateAttackRanges(base);
+  assert.equal(open.fillTiles.length, 289);
+  assert.equal(updateAttackRanges(base), open);
+  map.flag(12, 10, CollisionFlag.OBJECT_PROJECTILE_BLOCKER);
+  const walled = updateAttackRanges(base);
+  assert.notEqual(walled, open);
+  assert.ok(!walled.fillTiles.some(([x, y]) => x === 14 && y === 10));
+  map.unflag(12, 10, CollisionFlag.OBJECT_PROJECTILE_BLOCKER);
+  assert.equal(updateAttackRanges(base).fillTiles.length, 289);
+  setArenaConfig({ bounds: null, walkableTiles: null, collisionMap: null }, true);
+}
+
 assert.equal(describeHotkey({ key: "f", shiftKey: true }), "Shift+F");
 assert.equal(describeHotkey({ key: "Shift", shiftKey: true }), "");
 console.log("Attack Ranges: tiles, modes, hiding, allow list, settings and drag protection as the plugin has them");

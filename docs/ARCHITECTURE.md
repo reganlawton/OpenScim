@@ -33,7 +33,7 @@ Names in `code font` are the names in the code today, short ones included.
 | `client/encounters/sol-heredit/` | 3,882 | Sol Heredit, in fifteen modules. Moved out of `rendering.js` and cleaned. |
 | `client/encounters/inferno/` | 6,448 | The Inferno, in twenty-four modules. Moved out of `rendering.js` and cleaned. |
 | `client/toa/zebak/*.js` | 1,700 | The Zebak encounter, written for this project against the same interface as the original three. `native.js` is the model for what an encounter module should look like. |
-| `client/audio/soundEffects.js` | | Sound-effect synthesizer. |
+| `client/audio/soundEffects.js` | | Sound-effect synthesizer. In the browser it runs in `soundEffectsWorker.js`, off the main thread. |
 | `tools/determinism/` | | Headless harness that runs scripted fights and digests the engine state every tick (`test/test-determinism.mjs`). |
 
 Imports between the chunks: the engine imports the data modules of
@@ -323,6 +323,16 @@ context and `{ style, target }` (`style` is "melee", "range" or "magic"):
 `playerMinimumHit(maximumRolledDamage, context, attack)` returns the least
 the hit does, and `playerAlwaysAccurate(context, attack)` makes it sure to
 hit when it returns true (the Leviathan's weak spot and its pathfinder).
+Two more are asked with `(target, tick)` as a player is about to attack:
+`playerAttackOnCooldown`, while the weapon cools down, returns undefined (no
+attack) or `{ keepCooldown }`; `playerAttackKeepsReady`, with a weapon that is
+ready, makes the attack start no cooldown when it returns true.
+
+`isPlayerAttackProtected(style, target, { tick, player, world })`, asked for
+each hit of a player's attack as it is launched, makes the hit do nothing
+when it returns true (a boss praying against the style); the DPS projection
+asks it too and shows zero. The tick context's `deactivateAllPrayers()` turns
+every prayer of the player off.
 
 `getNpcDefinitions()` returns a set of per-NPC behaviours (class
 `NpcDefinitionRegistry`, built from definitions made with
@@ -338,7 +348,8 @@ The encounter never holds the engine. It is handed context objects:
 - the tick context (`resolveHazards`, `processPostTick`, NPC hooks): `tick`,
   `playerPos`, `world`, `tickEvents`, `inputs`, `npcMovements`, `logEvent`,
   `spawnNpc`, `despawnNpc`, `queueNpcHit`, `grantNextAttackSpeedup`,
-  `setProtectionPrayer`, `disableProtectionPrayersUntil`, `teleportPlayer`,
+  `delayNextAttack`, `setProtectionPrayer`, `disableProtectionPrayersUntil`,
+  `teleportPlayer`,
   `getPlayerWeaponState`, `attackObject`;
 - the NPC definition context: `tick`, `world`, `tickEvents`, `random`,
   `decisions`, `spawnNpc`, `despawnNpc`, `queueNpcHit`, `logEvent`,

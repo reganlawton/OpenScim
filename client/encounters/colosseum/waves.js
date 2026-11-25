@@ -16,6 +16,7 @@ import {
   warbandArcherSpawnSquare,
   warbandSpawnOffsets,
   quartetSpawnOffset,
+  southSpawns,
   colosseumMonsters,
 } from "./constants.js";
 
@@ -113,16 +114,44 @@ function isNearSpawnPoint(spawnPoint, tile) {
 // placed one tile south-east of the archer's tile, which closes the diamond
 // the other three leave open, and its role is drawn last, so that the rest
 // of the wave is the same with and without it.
-export function buildWaveSpawns(encounterSeed, wave, playerTile, modifiers = {}) {
+//
+// `practice.south` (set-up switches, not the game's) is { a, b }: what is to
+// stand on the south spawn A (the near one) and B (the far one), each
+// "random" (what the game would place there), "any" (one of the wave's
+// monsters, the first in its shuffled order) or a kind ("manticore", ...).
+// A kind the wave has no monster of left, or a point near the player, falls
+// back to random. Kinds are placed before "any", A before B; the other
+// monsters take the remaining points in their shuffled order. The draws are
+// the same as without it, and without it the wave is the game's.
+const practiceSouthSlots = ["a", "b"];
+export function buildWaveSpawns(encounterSeed, wave, playerTile, modifiers = {}, practice = {}) {
   const random = createWaveRandom(encounterSeed, wave, layoutSalt);
   const monsterKinds = shuffle(getWaveMonsterKinds(wave), random);
-  const spawnPoints = shuffle(
+  const shuffledPoints = shuffle(
     waveSpawnPoints.filter((spawnPoint) => !isNearSpawnPoint(spawnPoint, playerTile)),
     random,
   );
-  if (spawnPoints.length < monsterKinds.length) {
+  if (shuffledPoints.length < monsterKinds.length) {
     throw new RangeError(`Wave ${wave} has more monsters than spawn points away from the player`);
   }
+  const isSamePoint = (point, otherPoint) => point[0] === otherPoint[0] && point[1] === otherPoint[1];
+  const positions = monsterKinds.map(() => null);
+  for (const wantsAny of [false, true]) {
+    for (const slot of practiceSouthSlots) {
+      const wanted = practice.south?.[slot] ?? "random";
+      const point = southSpawns[slot];
+      if (wanted === "random" || (wanted === "any") !== wantsAny || !shuffledPoints.some((candidate) => isSamePoint(candidate, point))) {
+        continue;
+      }
+      const index = monsterKinds.findIndex((kind, monsterIndex) => positions[monsterIndex] === null && (wanted === "any" || kind === wanted));
+      if (index >= 0) {
+        positions[index] = point;
+      }
+    }
+  }
+  const forced = positions.filter(Boolean);
+  const freePoints = shuffledPoints.filter((point) => !forced.some((taken) => isSamePoint(taken, point)));
+  const spawnPoints = positions.map((position) => position ?? freePoints.shift());
   const { minX, minY, size } = warbandArcherSpawnSquare;
   const archerTile = [minX + Math.floor(random() * size), minY + Math.floor(random() * size)];
   const warband = warbandTurnOrder.map((role) => ({

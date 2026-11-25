@@ -61,3 +61,8 @@ export function zebakAutoMaxHit(melee, raid, path) {
 export function scaleToaAccuracyRoll(roll, raid = 0) {
   return raid ? Math.floor(roll * (250 + raid) / 250) : roll;
 }
+// The Tombs scale a monster's damage by 0.4% a raid level (zebakAutoMaxHit above does the same for his spit).
+// OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz): at raid level 370 the Tidal Waves' 6-10 hit 14-19.
+export function scaleToaDamage(damage, raid = 0) {
+  return Math.floor(damage * (250 + Math.min(375, raid)) / 250);
+}

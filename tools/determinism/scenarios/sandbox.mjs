@@ -33,6 +33,14 @@ const hostedArenas = [
   { arena: "vardorvis", npcs: [{ id: "nib", npc: "inferno.nibbler", position: [36, 22] }, { id: "jaguar", npc: "colosseum.jaguar", position: [44, 22] }] },
   { arena: "doom", npcs: [{ id: "nib", npc: "inferno.nibbler", position: [26, 26] }, { id: "seer", npc: "warband.seer", position: [36, 26] }] },
   { arena: "doom_deep", npcs: [{ id: "nib", npc: "inferno.nibbler", position: [26, 27] }, { id: "seer", npc: "warband.seer", position: [36, 27] }] },
+  { arena: "duke", npcs: [{ id: "nib", npc: "inferno.nibbler", position: [27, 38] }, { id: "jaguar", npc: "colosseum.jaguar", position: [35, 38] }] },
+  { arena: "leviathan", npcs: [{ id: "nib", npc: "inferno.nibbler", position: [25, 30] }, { id: "bat", npc: "inferno.bat", position: [41, 30] }] },
+];
+// The arenas whose floor is not the map's as it is (arenas.js: Duke's ice,
+// the Leviathan's bridge), without their boss: a free-for-all over a boulder.
+const ownFloorArenas = [
+  { arena: "duke", obstacles: [[31, 44]], npcs: [{ id: "jaguar", npc: "colosseum.jaguar", position: [28, 42] }, { id: "minotaur", npc: "colosseum.minotaur", position: [33, 48] }] },
+  { arena: "leviathan", obstacles: [[24, 36]], npcs: [{ id: "jaguar", npc: "colosseum.jaguar", position: [24, 41] }, { id: "minotaur", npc: "colosseum.minotaur", position: [39, 34] }] },
 ];
 
 // The sandbox's modules reach vendor.js, which Node loads only through the
@@ -94,6 +102,30 @@ export async function scenarios() {
       options: { scenario: { arena, mode: "versus", meta: { name: "Harness: host" }, options: { bossMechanics: true }, npcs } },
       ...rangedGear,
       script: shootNearest(),
+    })),
+    // Each arena's boss in a free-for-all, on a team against the two NPCs,
+    // with the player left out: it fights them with its own mechanics.
+    ...hostedArenas.map(({ arena, npcs }) => ({
+      name: `sandbox/host-ffa/${arena}`,
+      kind: sandboxVariantKind(arena),
+      seed: 19,
+      ticks: 80,
+      mechanics: { infiniteHealth: true },
+      options: {
+        scenario: {
+          arena, mode: "ffa", meta: { name: "Harness: host in a free-for-all" },
+          options: { bossMechanics: true, ffaIncludesPlayer: false, bossTeam: "1" },
+          npcs: npcs.map((npc) => ({ ...npc, team: "2" })),
+        },
+      },
+    })),
+    ...ownFloorArenas.map(({ arena, obstacles, npcs }) => ({
+      name: `sandbox/floor/${arena}`,
+      kind: sandboxVariantKind(arena),
+      seed: 23,
+      ticks: 60,
+      mechanics: { infiniteHealth: true },
+      options: { scenario: { arena, mode: "ffa", meta: { name: "Harness: floor" }, obstacles, npcs } },
     })),
     // Each monster of the catalog (each encounter's sandbox.js),
     // alone against the player: a new one needs its digests recorded.

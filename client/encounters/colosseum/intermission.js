@@ -227,10 +227,24 @@ let continued = false;
 // the player has set for them, as a `zoom` on each panel. The interface
 // takes the same: the zoom of the first element that has one and is not one
 // of the application's own overlays, which carry `--overlay-scale`.
+//
+// The overlays ask every frame. The panel found is kept and its zoom read
+// again each time, so a change of the scale shows at once; the page is
+// searched again when that panel has left it or lost its zoom, and else at
+// most every `panelSearchMs`, for a panel that has come before it (or the
+// first, when there was none).
+const panelSearchMs = 250; // inferred: short enough not to be seen, long enough to cost nothing
+let panel = null;
+let panelSearchedAt = -Infinity;
 export function getGamePanelScale() {
-  const panel = [...document.querySelectorAll('div[style*="zoom"]')].find(
-    (element) => !element.style.getPropertyValue("--overlay-scale") && !element.closest(".colosseum-offer, .colosseum-hud"),
-  );
+  const now = performance.now();
+  if ((panel && (!panel.isConnected || !panel.style.zoom)) || now - panelSearchedAt >= panelSearchMs) {
+    panelSearchedAt = now;
+    panel =
+      [...document.querySelectorAll('div[style*="zoom"]')].find(
+        (element) => !element.style.getPropertyValue("--overlay-scale") && !element.closest(".colosseum-offer, .colosseum-hud"),
+      ) ?? null;
+  }
   return Number(panel?.style.zoom) || 1;
 }
 

@@ -120,12 +120,12 @@ export const scenarios = [
     },
   },
   {
-    // Beside the pool: one bite early, then orbs until the third roar, then
-    // bites whenever it attacks.
+    // Beside the pool: one bite early, then orbs until the third roar, then a
+    // bite on some of its turns, the volleys and roars going on.
     name: "leviathan/bites",
     kind: KIND,
     seed: 9,
-    ticks: 90,
+    ticks: 130, // past the fourth volley's roar
     mechanics: { infiniteHealth: true, infinitePrayer: true },
     ...rangedGear,
     script(tick, api) {

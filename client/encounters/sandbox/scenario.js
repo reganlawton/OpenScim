@@ -171,6 +171,8 @@ export function normalizeScenario(input) {
   const options = input.options ?? {};
   const playerStart = tile(options.playerStart) ?? null;
   const countdownTicks = integer(options.countdownTicks, 0, 10) ?? defaultCountdownTicks;
+  // The team of the arena's boss in a free-for-all (encounter.js); none: a team of its own.
+  const bossTeam = text(options.bossTeam, 20).trim();
   const obstacleList = Array.isArray(input.obstacles) ? input.obstacles : [];
   if (obstacleList.length > maxScenarioObstacles) throw new ScenarioError(`At most ${maxScenarioObstacles} obstacles`);
   const obstacles = obstacleList.map((value, index) => {
@@ -188,7 +190,7 @@ export function normalizeScenario(input) {
     },
     arena: input.arena,
     mode,
-    options: { playerStart, ffaIncludesPlayer: options.ffaIncludesPlayer !== false, bossMechanics: options.bossMechanics === true, countdownTicks },
+    options: { playerStart, ffaIncludesPlayer: options.ffaIncludesPlayer !== false, bossMechanics: options.bossMechanics === true, countdownTicks, ...(bossTeam ? { bossTeam } : {}) },
     ...(obstacles.length > 0 ? { obstacles } : {}),
     ...(input.gear ? { gear: normalizeGear(input.gear) } : {}),
     npcs: npcs.map((npc, index) => normalizeNpc(npc, index, takenIds)),

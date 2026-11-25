@@ -200,7 +200,9 @@ function decodeNpc(bytes) {
     else if (op === 40 || op === 41) r.skipList(4);
     else if (op === 60 || op === 160) r.skipList(2);
     else if (op === 62) r.skipList(4);
-    else if ([93, 99, 107, 109, 111, 112, 122, 123, 141, 143, 145, 158, 159, 161, 162].includes(op)) {}
+    // The client does not know opcode 130 and reads on from the next byte; every
+    // NPC that has it (the Maggot King, 15742) decodes to its last byte that way.
+    else if ([93, 99, 107, 109, 111, 112, 122, 123, 130, 141, 143, 145, 158, 159, 161, 162].includes(op)) {}
     else if ([100, 101, 119, 125, 128, 140, 163, 165, 168].includes(op)) r.o += 1;
     else if ([18, 44, 45, 95, 97, 98, 103, 124, 127, 137, 138, 139, 142, 144, 146].includes(op) || (op >= 74 && op <= 79) || (op >= 170 && op < 176)) r.o += 2;
     else if (op === 135 || op === 136) r.o += 3;

@@ -1493,7 +1493,8 @@ var ls = Object.fromEntries(
     },
   }).map(([ez, eA]) => [ez, u_e(eA)]),
 );
-var zae = ({ glyph: glyph }) =>
+// memo: a pure function of `glyph`; dozens of these re-rendered with every tick.
+var zae = (0, pn.memo)(({ glyph: glyph }) =>
   (0, wn.jsxs)("svg", {
     className: "launcher-icon",
     width: 16,
@@ -1535,7 +1536,8 @@ var zae = ({ glyph: glyph }) =>
         ),
       }),
     ],
-  });
+  }),
+);
 function fse({ className: className, ...eA }) {
   return (0, wn.jsx)("button", {
     ...eA,
@@ -18327,11 +18329,13 @@ function kIe({
       return hr(hs, hu, hv, hw, hx, hy, hz, hA);
     },
   };
-  const f2 = (0, pn.useRef)(
-    new HAe({}, dF.clock, {
+  // Made once: `useRef(new HAe(...))` built (and threw away) a recorder on every render.
+  const f2 = (0, pn.useRef)(null);
+  if (f2.current === null) {
+    f2.current = new HAe({}, dF.clock, {
       idleClock: "held",
-    }),
-  );
+    });
+  }
   const f3 = (0, pn.useRef)(false);
   const f4 = (0, pn.useRef)(0);
   (0, pn.useEffect)(() => bD(f2.current), []);
@@ -26171,7 +26175,8 @@ var dOe = ({
     ],
   });
 };
-function pOe({ visible: visible, active: eA = false, label: label }) {
+// memo: a pure function of its props, which a tick does not change.
+var pOe = (0, pn.memo)(function pOe({ visible: visible, active: eA = false, label: label }) {
   const eC = {
     gPmID: "div",
     LrCrB: function (eD, eE) {
@@ -26212,7 +26217,7 @@ function pOe({ visible: visible, active: eA = false, label: label }) {
         }),
     ],
   });
-}
+});
 function hOe(ez) {
   if (ez < 33) {
     return cK.colors.danger;
@@ -39025,7 +39030,8 @@ var QFe = [
     labelCompact: "Snap",
   },
 ];
-var ZFe = ({ insets: insets }) => {
+// memo: its props are stable from tick to tick; the Alt key comes from a store.
+var ZFe = (0, pn.memo)(({ insets: insets }) => {
   const eA = {
     SZWsa: "Alt",
     jAUaT: function (eG, eH) {
@@ -39134,7 +39140,7 @@ var ZFe = ({ insets: insets }) => {
       ],
     }),
   });
-};
+});
 var boe = {
   saturatedHeart: 27641,
   antipoison: 2446,
@@ -40419,7 +40425,8 @@ const communityLinks = [
   { name: "Discord", glyph: "discord", href: "https://discord.gg/openscim", description: "Join the OpenScim Discord" },
   { name: "GitHub", glyph: "github", href: "https://github.com/realkadera/OpenScim", description: "View OpenScim on GitHub" },
 ];
-function CommunityLinks({ className, showLabels = false }) {
+// memo: the links are constant; it re-rendered with every tick.
+const CommunityLinks = (0, pn.memo)(function CommunityLinks({ className, showLabels = false }) {
   return communityLinks.map(({ name, glyph, href, description }) => (0, wn.jsxs)(l_e, {
     href,
     target: "_blank",
@@ -40433,7 +40440,7 @@ function CommunityLinks({ className, showLabels = false }) {
       showLabels && (0, wn.jsx)("span", { children: name }),
     ],
   }, name));
-}
+});
 function bHe(ez, eA) {
   const eB = {
     mAQKF: "undefined",
@@ -50732,7 +50739,9 @@ function hBe(ez) {
     return String(Math.max(0, 1 - (eB - 0.8) / (1 - 0.8)));
   }
 }
-var gBe = ({
+// memo: its props are stable from tick to tick; the drops come from its own
+// subscription, which moves them without a render.
+var gBe = (0, pn.memo)(({
   overlayScale: ez = 1,
   overlayOuterScale: eA = 1,
   enabled: enabled,
@@ -50895,7 +50904,7 @@ var gBe = ({
   } else {
     return null;
   }
-};
+});
 var mBe = {
   x: 359,
   y: 74,
@@ -51422,17 +51431,24 @@ var yBe = Q$e(
     const hu = hd ? (hd.modes.prayerFilterViewOpen ?? false) : gC;
     const hv = hd ? (hd.modes.spellFilterViewOpen ?? false) : gE;
     const hw = hd ? (hd.modes.quickPrayerSetupOpen ?? false) : eI;
+    // Kept on the four levels, not on the state, which is new every tick:
+    // the quick prayers below were worked out again on every tick.
+    const hxState = !!simulationState;
+    const hxPrayer = simulationState?.stats.prayer.max;
+    const hxDefence = simulationState?.stats.defence.max;
+    const hxAttack = simulationState?.stats.attack.max;
+    const hxStrength = simulationState?.stats.strength.max;
     const hx = (0, pn.useMemo)(
       () =>
-        simulationState
+        hxState
           ? {
-              basePrayerLevel: simulationState.stats.prayer.max,
-              baseDefenceLevel: simulationState.stats.defence.max,
-              baseAttackLevel: simulationState.stats.attack.max,
-              baseStrengthLevel: simulationState.stats.strength.max,
+              basePrayerLevel: hxPrayer,
+              baseDefenceLevel: hxDefence,
+              baseAttackLevel: hxAttack,
+              baseStrengthLevel: hxStrength,
             }
           : undefined,
-      [simulationState],
+      [hxState, hxPrayer, hxDefence, hxAttack, hxStrength],
     );
     const hy = simulationState?.mechanicsConfig?.upgradedPrayers;
     const hz = simulationState?.mechanicsConfig?.zealPrayer;

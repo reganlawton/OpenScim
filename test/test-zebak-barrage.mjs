@@ -18,6 +18,7 @@ for (const path of [0, 2, 3, 4, 6]) {
   const player = {position:[29,32],alive:true};
   const context = {world:{actors:new Map([["zebak",boss],["player",player]])},playerPos:player.position};
   encounter.phases.enraged = true;
+  encounter.bloodEvery = 8; // as after a cast made while enraged
   encounter.phases.summonClouds = context => clouds.push(context.tick);
   const period = encounter.settings.enragePeriod;
   const firstRecovery = encounter.settings.period;
@@ -31,7 +32,8 @@ for (const path of [0, 2, 3, 4, 6]) {
   assert.deepEqual(launches,[10,...Array.from({length:36},(_,i)=>10+firstRecovery+i*period)]);
   assert.deepEqual(clouds,[launches[7]+3,launches[31]+3]);
   assert.deepEqual(barrages,[launches[15]+3,launches[23]+3]);
-  const lead = path===2 || path===3 ? 1 : 0;
+  // The spit lands 8 ticks on at path levels 0-3 (OBS, 20261125-160410-Tombs-of-Amascut.jsonl.gz) and 5 above.
+  const lead = path < 2 ? 1 : path < 4 ? 2 : 0;
   assert.ok(barrages.every(tick=>impacts.includes(tick+lead)));
   assert.equal(encounter.pendingBarrages.size,0);
 }
@@ -71,7 +73,7 @@ try {
         const motion = "const { position: position, velocity: velocity } = t.motion;";
         assert.ok(source.includes(motion));
         source = source.replace(motion,motion + `
-          if(window.checkEnrage && !window.firstEnragePose && [2177,2179].includes(spotAnimId)) {
+          if(window.checkEnrage && !window.firstEnragePose && [2176,2178].includes(spotAnimId)) {
             window.firstEnragePose = window.scene.getPlayingSequenceFrames().map(p=>p.seqId);
           }`);
       }
@@ -118,7 +120,9 @@ try {
   });
   await page.waitForFunction(() => window.firstEnragePose);
   const pose = await page.evaluate(() => window.firstEnragePose);
-  assert.ok(pose.includes(9626) && pose.includes(9627) && !pose.includes(9628), JSON.stringify(pose));
+  // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 618-705): enraged at path level 0 he spits the
+  // normal pots (2176, 2178) with the normal animation, head 9624 and tail 9625.
+  assert.ok(pose.includes(9624) && pose.includes(9625) && !pose.includes(9626) && !pose.includes(9628), JSON.stringify(pose));
   assert.deepEqual(errors,[]);
   console.log("Both claw graphics and the player impact rendered. Web Audio started the recorded impact cue once on the damage tick.",sounds);
 } finally {

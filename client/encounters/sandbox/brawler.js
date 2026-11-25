@@ -11,9 +11,16 @@
 // Heredit's and Yama's scenes play (the arena's host draws with those). No
 // scene plays both.
 //
+// What a monster does besides (catalog.js names each, its own fight's
+// module the numbers): a healer heals one of its side until something hits
+// it (`supports`); the meleer digs (`digs`); the mager brings back the dead
+// (`revives`); the blob reads the prayer (`readsPrayer`). Summons, splits and
+// heals from damage are the encounter's, as they make or hurt others
+// (encounter.js).
+//
 // Random numbers come from `context.random`, the encounter's seeded
 // generator; nothing else is random.
-import { canNpcActAtTick, isActorAlive } from "../../engine/npcState.js";
+import { canNpcActAtTick, isActorAlive, isNpcAlive } from "../../engine/npcState.js";
 import { getProjectileFlightCycles } from "../../engine/projectiles.js";
 import { getNpcPursuitMoves, isArenaFootprintWalkable } from "../shared/npcMovement.js";
 import { findNpcRouteToMeleeRange } from "../shared/npcRoutes.js";
@@ -41,6 +48,163 @@ const defaultTargetGraphicHeight = 92;
 
 /** The reach that brings an NPC close enough for its longest attack. */
 export const getApproachRange = (entry) => Math.max(...entry.attacks.map((attack) => attack.range));
+
+// The animation of an NPC in both schemas, with graphics `on` an actor or
+// on a tile ({ position }): the default scene's target, the hosts' scenes'
+// `actorId` or `position`.
+function animate(actor, clipId, context, graphics = [], projectiles = []) {
+  const animations = clipId ? [{ actorId: actor.id, clipId, delayCycles: 0 }] : [];
+  emitInfernoVisual(context.tickEvents, {
+    animations,
+    projectiles,
+    graphics: graphics.map(({ spotAnimId, on, height, delayCycles }) => ({
+      spotAnimId, height, delayCycles: delayCycles ?? 0,
+      target: on.kind ? buildActorVisualTarget(on) : { kind: "tile", position: [...on.position] },
+    })),
+  });
+  emitColosseumVisual(context.tickEvents, {
+    animations,
+    projectiles,
+    graphics: graphics.map(({ spotAnimId, on, height, delayCycles }) => ({
+      spotAnimId, height, delayCycles: delayCycles ?? 0,
+      ...(on.kind ? { actorId: on.id } : { position: [...on.position] }),
+    })),
+  });
+}
+
+/**
+ * Open tiles for an NPC of `size` around a footprint (`around`: { position,
+ * size }), `distance.min` to `distance.max` tiles from it, walkable and on no
+ * one, nearest first and in a fixed order; `taken` footprints are left out.
+ */
+export function findOpenSpots(context, around, size, distance = { min: 1, max: 8 }, taken = []) {
+  const occupancy = context.world.occupancy;
+  const [ax, ay] = around.position;
+  const spots = [];
+  const overlaps = ([x, y], [ox, oy], otherSize) => x < ox + otherSize && ox < x + size && y < oy + otherSize && oy < y + size;
+  for (let d = distance.min; d <= distance.max; d++) {
+    for (let x = ax - d - size + 1; x <= ax + around.size - 1 + d; x++) {
+      for (let y = ay - d - size + 1; y <= ay + around.size - 1 + d; y++) {
+        const gap = Math.max(Math.max(0, ax - (x + size - 1), x - (ax + around.size - 1)), Math.max(0, ay - (y + size - 1), y - (ay + around.size - 1)));
+        if (gap !== d || !isArenaFootprintWalkable([x, y], size)) continue;
+        let clear = true;
+        for (let dx = 0; dx < size && clear; dx++) for (let dy = 0; dy < size && clear; dy++) if (occupancy.isBlocked(x + dx, y + dy)) clear = false;
+        if (!clear || taken.some((other) => overlaps([x, y], other.position, other.size))) continue;
+        spots.push([x, y]);
+      }
+    }
+    if (spots.length > 0 && distance.nearest) break;
+  }
+  return spots;
+}
+
+// --- a healer (`supports`) -------------------------------------------------
+// It heals until something that is not of its side hits it; from then on it
+// fights that, as long as that lives. Whom it heals: the one that summoned it
+// (Jad, Zuk); one placed by the scenario, the nearest of its side that heals
+// no one. One whose summoner died fights like any other.
+export function supportTargetOf(actor, entry, context, config) {
+  const state = actor.state;
+  state.healingId = null;
+  if (!entry.supports) return null;
+  const attacker = state.lastAttackerId ? context.world.actors.get(state.lastAttackerId) : null;
+  if (attacker && isActorAlive(attacker) && !config.isAlly(actor, attacker)) return null;
+  let support = state.supportId ? context.world.getNpc(state.supportId) : null;
+  if (!support || !isNpcAlive(support)) {
+    if (state.summonerId) return null;
+    support = null;
+    let best = Infinity;
+    for (const npc of context.world.getNpcs()) {
+      if (npc === actor || !isNpcAlive(npc) || !config.isAlly(actor, npc) || config.entryOf(npc)?.supports) continue;
+      const gap = Math.max(Math.abs(npc.position[0] - actor.position[0]), Math.abs(npc.position[1] - actor.position[1]));
+      if (gap < best) {
+        best = gap;
+        support = npc;
+      }
+    }
+    if (!support) return null;
+    state.supportId = support.id;
+  }
+  state.healingId = support.id;
+  return support;
+}
+
+function supportTick(actor, support, heals, context, config) {
+  const idle = { environmentalDamages: [] };
+  const state = actor.state;
+  faceActorToward(actor, support);
+  if (context.tick < (state.nextHealTick ?? 0) || !isNpcInAttackRange(actor, support, heals.reach)) return idle;
+  state.nextHealTick = context.tick + heals.everyTicks;
+  const [least, most] = heals.heal;
+  const amount = least === most ? least : least + Math.floor(context.random() * (most - least + 1));
+  const projectiles = heals.projectile
+    ? [{ ...heals.projectile, sourcePosition: getProjectileSourcePosition(actor), target: buildActorVisualTarget(support) }]
+    : [];
+  animate(actor, heals.clip, context, heals.graphic ? [{ ...heals.graphic, on: support }] : [], projectiles);
+  if (heals.applyDelayTicks) config.queueHeal({ at: context.tick + heals.applyDelayTicks, healerId: actor.id, targetId: support.id, amount });
+  else healNpc(support, amount, context.tickEvents);
+  return idle;
+}
+
+// --- the meleer's dig (`digs`, inferno/meleer.js) -------------------------
+// Every 40 to 60 ticks (50 after it comes) it looks whether it has attacked
+// in the last 20; if not, it goes down, where nothing can attack it, and 3
+// ticks later comes up beside where its target stood, waits 3 ticks to walk
+// and 9 to attack.
+const digDownTicks = 3;
+function digTick(actor, digs, context, config) {
+  const state = actor.state;
+  const { tick } = context;
+  if (state.dig) {
+    if (tick < state.dig.downTick + digDownTicks) return true;
+    const spot = findOpenSpots(context, { position: state.dig.target, size: 1 }, actor.size, { min: 1, max: 8, nearest: true }, [])[0] ?? actor.position;
+    actor.position = [...spot];
+    actor.previousPosition = [...spot];
+    actor.movementPath = [];
+    state.dig = null;
+    delete actor.targetableFromTick;
+    state.walkFromTick = tick + 3;
+    actor.combat.nextActionTick = Math.max(actor.combat.nextActionTick, tick + 9);
+    animate(actor, digs.clipUp, context);
+    return true;
+  }
+  if (tick < (state.nextDigCheckTick ?? Infinity)) return false;
+  const interval = 40 + Math.floor(context.random() * 21);
+  const lastAttackTick = actor.combat.lastAttackTick;
+  const target = config.selectTarget(actor, context);
+  if ((lastAttackTick !== null && tick - lastAttackTick <= 19) || !target) {
+    state.nextDigCheckTick = tick + interval;
+    return false;
+  }
+  state.nextDigCheckTick = tick + 6 + interval;
+  state.dig = { downTick: tick, target: [...target.position] };
+  actor.targetableFromTick = tick + digDownTicks;
+  actor.combat.targetId = null;
+  animate(actor, digs.clipDown, context);
+  return true;
+}
+
+// --- the mager's revive (`revives`, inferno/mager.js) ---------------------
+// As it attacks, by `chance`, it brings back one of the dead of its side the
+// encounter keeps (encounter.js, corpses), on an open tile near it, and
+// stands still; that attack does not go off.
+function tryRevive(actor, revives, context, config) {
+  const corpses = config.corpsesFor(actor, revives.of);
+  if (corpses.length === 0 || context.random() >= revives.chance) return false;
+  const corpse = corpses[Math.floor(context.random() * corpses.length)];
+  const spots = findOpenSpots(context, { position: actor.position, size: actor.size }, corpse.size, { min: 1, max: 6 });
+  if (spots.length === 0) return false;
+  const spot = spots[Math.floor(context.random() * spots.length)];
+  faceActorToward(actor, { position: spot, size: 1 });
+  config.revive(corpse, spot, context, revives.firstActionTicks);
+  // mager.js: the graphic 150 high near the middle of the one brought back.
+  const graphicTile = [spot[0] + Math.max(0, corpse.size - 2), spot[1] + Math.max(0, corpse.size - 2)];
+  animate(actor, revives.clip, context, [{ spotAnimId: 444, on: { position: graphicTile }, height: 150 }]);
+  actor.state.immobileUntilTick = context.tick + revives.stillTicks;
+  actor.combat.lastAttackTick = context.tick;
+  scheduleNextActionTick(actor.combat, context.tick, actor.combat.attackSpeed);
+  return true;
+}
 
 // The visual of an attack: its projectiles and the graphics on the target.
 // A windup (Jad's three ticks) delays both, as it delays the hit.
@@ -129,13 +293,25 @@ function routeAround(actor, target, context) {
 export const brawlerNpcDefinition = defineNpc({
   id: "sandbox-brawler",
   // The scene plays the death; the encounter takes the body away (encounter.js).
-  onDamageResolved: ({ actor, damage }) => {
+  onDamageResolved: ({ actor, damage, context, config }) => {
     if (damage?.sourceId) actor.state.lastAttackerId = damage.sourceId;
+    config.onHurt?.(actor, damage, context);
   },
   move: ({ actor, context, config }) => {
     if (!canNpcActAtTick(actor, context.tick) || !isActorAlive(actor)) return [];
+    // Under the floor, or just come up from it (the meleer's dig).
+    if (actor.state.dig || context.tick < (actor.state.walkFromTick ?? 0)) return [];
+    const entry = config.entryOf(actor);
+    // A healer goes to the one it heals, and stops in reach of it.
+    const support = supportTargetOf(actor, entry, context, config);
+    if (support) {
+      actor.combat.targetId = null;
+      if (entry.immobile || isNpcInAttackRange(actor, support, entry.supports.reach)) return [];
+      const moves = getNpcPursuitMoves(actor, context, support);
+      return moves.length > 0 ? moves : routeAround(actor, support, context);
+    }
     // An NPC that never moves in its own fight (TzKal-Zuk) stays where it was placed.
-    if (config.entryOf(actor).immobile) {
+    if (entry.immobile) {
       actor.combat.targetId = config.selectTarget(actor, context)?.id ?? null;
       return [];
     }
@@ -151,8 +327,12 @@ export const brawlerNpcDefinition = defineNpc({
   tick: ({ actor, context, config }) => {
     const idle = { environmentalDamages: [] };
     if (!canNpcActAtTick(actor, context.tick) || !isActorAlive(actor)) return idle;
+    const own = config.entryOf(actor);
+    if (own.digs && digTick(actor, own.digs, context, config)) return idle;
+    const support = supportTargetOf(actor, own, context, config);
+    if (support) return supportTick(actor, support, own.supports, context, config);
     // A charged volley (the manticore's) runs on every tick: it draws its charge.
-    const charged = config.entryOf(actor).attacks.find((attack) => attack.chargedVolley);
+    const charged = own.attacks.find((attack) => attack.chargedVolley);
     if (charged) return chargedVolley(actor, charged, context, config);
     if (context.tick < actor.combat.nextActionTick) return idle;
     const target = config.selectTarget(actor, context);
@@ -164,13 +344,20 @@ export const brawlerNpcDefinition = defineNpc({
     const count = (actor.state.attackCount ?? 0) + 1;
     const inReach = entry.attacks.filter((attack) => isNpcInAttackRange(actor, target, attack.range) && (attack.everyNth ? count % attack.everyNth === 0 : true));
     const due = inReach.find((attack) => attack.everyNth);
-    const plain = inReach.filter((attack) => !attack.everyNth);
+    let plain = inReach.filter((attack) => !attack.everyNth);
+    // The blob's: of what reaches, a style the player's protection prayer
+    // does not cover (inferno/blob.js), if there is one.
+    if (entry.readsPrayer && target.kind === "player" && target.activePrayer) {
+      const uncovered = plain.filter((attack) => !isCorrectProtectionPrayer(planOfStyle[attack.style].damageType, target.activePrayer));
+      if (uncovered.length > 0) plain = uncovered;
+    }
     if (!due && plain.length === 0) {
       // Out of reach: a healer heals one of its side instead (the minotaur).
       return entry.heal ? heal(actor, target, entry.heal, context, config) : idle;
     }
     actor.state.attackCount = count;
     const attack = due ?? (plain.length === 1 ? plain[0] : plain[Math.floor(context.random() * plain.length)]);
+    if (entry.revives && tryRevive(actor, entry.revives, context, config)) return idle;
     if (attack.special) return special(actor, target, attack, context, config);
     // One attack may be several hits, each rolled on its own and with a
     // hitsplat of its own: `hits` at once (the jaguar's three claws), or a
@@ -209,7 +396,8 @@ export const brawlerNpcDefinition = defineNpc({
     });
     actor.combat.attackStyle = attack.style;
     actor.combat.lastAttackTick = context.tick;
-    scheduleNextActionTick(actor.combat, context.tick, actor.combat.attackSpeed);
+    // An attack of its own speed (Jad's melee, every 4 ticks).
+    scheduleNextActionTick(actor.combat, context.tick, attack.attackSpeed ?? actor.combat.attackSpeed);
     return { environmentalDamages: [], npcAttacks };
   },
 });
@@ -370,16 +558,18 @@ function special(actor, target, attack, context, config) {
   actor.state.immobileUntilTick = context.tick + started.holdTicks;
   faceActorToward(actor, target);
   const animations = [{ actorId: actor.id, clipId: started.clipId, delayCycles: 0 }];
-  // What it draws as it starts: on itself (`on: "self"`) or on a tile.
+  // What it draws as it starts: on itself (`on: "self"`) or on a tile; and
+  // what it throws at its target (the sparks of Zuk's healers).
   const graphics = started.graphics ?? [];
+  const projectiles = (started.projectiles ?? []).map((projectile) => ({ ...projectile, sourcePosition: getProjectileSourcePosition(actor), target: buildActorVisualTarget(target) }));
   emitInfernoVisual(context.tickEvents, {
     animations,
-    projectiles: [],
+    projectiles,
     graphics: graphics.map(({ spotAnimId, on, tile, height, delayCycles }) => ({ spotAnimId, target: on === "self" ? buildActorVisualTarget(actor) : { kind: "tile", position: [...tile] }, height, delayCycles })),
   });
   emitColosseumVisual(context.tickEvents, {
     animations,
-    projectiles: [],
+    projectiles,
     graphics: graphics.map(({ spotAnimId, on, tile, height, delayCycles }) => (on === "self" ? { spotAnimId, actorId: actor.id, height, delayCycles } : { spotAnimId, position: [...tile], height, delayCycles })),
   });
   actor.combat.attackStyle = attack.style;

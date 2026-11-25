@@ -27,7 +27,7 @@ npm run dev          # http://127.0.0.1:5173/
 Encounters: `/` (menu), `/yama/`, `/inferno/`, `/sol-heredit/`, `/zebak/`, `/sandbox/` (a fight of your own: `docs/SANDBOX.md`).
 `/toa/` is the Tombs of Amascut nexus, also reached through the gateway in the lobby.
 The lobby's Desert Treasure II gate opens a chooser for its four bosses: Vardorvis (`/vardorvis/`), Duke Sucellus (`/duke-sucellus/`) and the Leviathan (`/leviathan/`, its post-quest fight) have fights, the Whisperer is not built yet ("Coming Soon").
-The waves of the Fortis Colosseum are at `/colosseum/`, the Doom of Mokhaiotl at `/doom-of-mokhaiotl/`.
+The waves of the Fortis Colosseum are at `/colosseum/`, the Doom of Mokhaiotl at `/doom-of-mokhaiotl/`, Araxxor at `/araxxor/`, the Alchemical Hydra at `/alchemical-hydra/`.
 
 `npm run build` writes a static site to `dist/`; `npm run preview` serves it.
 
@@ -43,8 +43,11 @@ empty picture; `tools/assets/standins.mjs`), so that the client shows no
 broken image. An original put back from a backup is never replaced.
 
 After pulling a change to `tools/assets/cache-groups.json` or to a file of
-`tools/assets/cache-groups/` (one per encounter), run
-`npm run assets -- --force` to rebuild the trimmed cache.
+`tools/assets/cache-groups/` (one per encounter), run `npm run assets`: it
+rebuilds a trimmed cache that lacks a listed group (`--force` is needed only
+to replace a `disk.zip` it did not build). `npm run build` fails on a trimmed
+cache that lacks a listed group, since the scenes that need the group would
+load to a black screen.
 
 ## Test
 

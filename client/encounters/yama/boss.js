@@ -322,13 +322,17 @@ function rollYamaAccuracy(actor, style, environment) {
     );
   }
   const formulaStyle = style === "melee" ? "melee_slash" : style === "range" ? "ranged" : "magic";
-  const hitChance = getNpcAttackAccuracy(
-    formulaStats,
-    getPlayerFormulaStats(player),
-    formulaStyle,
-    player.equipmentStats,
-    getPrayerMultipliers(player.activePrayer, player.offensivePrayer),
-  );
+  // The sandbox's free-for-all hands Yama a monster as the one he fights
+  // (sandbox/encounter.js): its own stats then.
+  const hitChance = player.kind !== "player"
+    ? getNpcAttackAccuracy(formulaStats, getDrainedNpcFormulaStats(player), formulaStyle)
+    : getNpcAttackAccuracy(
+        formulaStats,
+        getPlayerFormulaStats(player),
+        formulaStyle,
+        player.equipmentStats,
+        getPrayerMultipliers(player.activePrayer, player.offensivePrayer),
+      );
   return environment.config.accuracyRandom() < hitChance;
 }
 export { createYamaAttackPolicyState, yamaNpcDefinition, getYamaState };

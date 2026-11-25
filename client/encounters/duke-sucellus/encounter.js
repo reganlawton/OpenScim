@@ -45,12 +45,12 @@ export const bossSize = 7; // CACHE, WIKI
 const mouth = [31, 53]; // inferred (RSPSApp's): where his projectiles start
 // In the room, out of his reach (inferred: the game brings the player in at
 // the gate, 31,34, to gather and feed him first; the simulator skips that).
-const playerStart = [31, 40];
+export const playerStart = [31, 40];
 // The engine reads a tile of the map as walkable only where it has an
 // underlay; the asylum's ice between the vents has an overlay alone (CACHE).
 // The arena is built from a tile that has one, and refineArenaConfig adds
 // the rest of the room's floor.
-const arenaSeed = [31, 47];
+export const arenaSeed = [31, 47];
 const room = { minX: 26, maxX: 36, minY: 35, maxY: 51 }; // CACHE
 // CACHE (loc 47513): the six 3 x 1 pillars along the walls, two beside him.
 const pillars = [[25, 52], [25, 44], [25, 40], [35, 52], [35, 44], [35, 40]];
@@ -202,6 +202,19 @@ const inGas = ([x, y], [vx, vy]) => Math.abs(x - vx) <= 1 && Math.abs(y - vy) <=
 const distance = ([x, y], [vx, vy]) => Math.hypot(x - vx, y - vy);
 const tileTarget = (position) => ({ kind: "tile", position: [...position] });
 
+// Every tile of the room that the map's collision leaves open (arenaSeed):
+// the fight's arena, and the sandbox's in his asylum (sandbox/arenas.js).
+export function dukeRoomArena(arena) {
+  if (!arena.collisionMap || !arena.walkableTiles) return arena;
+  const walkableTiles = new Set(arena.walkableTiles);
+  for (let x = room.minX; x <= room.maxX; x++)
+    for (let y = room.minY; y <= room.maxY; y++)
+      if (!arena.collisionMap.hasFlag(x, y, CollisionFlag.FLOOR_BLOCKED | CollisionFlag.OBJECT)) walkableTiles.add(key([x, y]));
+  const { minX, maxX, minY, maxY } = arena.bounds ?? room;
+  const bounds = { minX: Math.min(minX, room.minX), maxX: Math.max(maxX, room.maxX), minY: Math.min(minY, room.minY), maxY: Math.max(maxY, room.maxY) };
+  return { ...arena, walkableTiles, bounds: { ...bounds, width: bounds.maxX - bounds.minX + 1, height: bounds.maxY - bounds.minY + 1 } };
+}
+
 // What differs between the two versions.
 // https://oldschool.runescape.wiki/w/Duke_Sucellus/Strategies (Awakened mode)
 // Nothing of the awakened fight has been read from a recording: its numbers
@@ -296,16 +309,8 @@ class DukeSucellusEncounter {
   getArenaConfig() {
     return { bounds: null, collisionMap: null, walkableTiles: null };
   }
-  // Every tile of the room that the map's collision leaves open (arenaSeed).
   refineArenaConfig(arena) {
-    if (!arena.collisionMap || !arena.walkableTiles) return arena;
-    const walkableTiles = new Set(arena.walkableTiles);
-    for (let x = room.minX; x <= room.maxX; x++)
-      for (let y = room.minY; y <= room.maxY; y++)
-        if (!arena.collisionMap.hasFlag(x, y, CollisionFlag.FLOOR_BLOCKED | CollisionFlag.OBJECT)) walkableTiles.add(key([x, y]));
-    const { minX, maxX, minY, maxY } = arena.bounds ?? room;
-    const bounds = { minX: Math.min(minX, room.minX), maxX: Math.max(maxX, room.maxX), minY: Math.min(minY, room.minY), maxY: Math.max(maxY, room.maxY) };
-    return { ...arena, walkableTiles, bounds: { ...bounds, width: bounds.maxX - bounds.minX + 1, height: bounds.maxY - bounds.minY + 1 } };
+    return dukeRoomArena(arena);
   }
   createNpcs() {
     const formulaStats = tableFormulaStats(this.version);
@@ -350,13 +355,7 @@ class DukeSucellusEncounter {
   processPostTick(context) {
     const boss = context.world.getNpc(bossActorId);
     const player = context.world.getPlayer();
-    if (this.wakeTick === null && boss?.alive && player?.alive && player.attackTarget === boss.id && isSquarelyBeside(player.position)) {
-      // The engine takes the player off him again, and refuses further clicks,
-      // while he cannot be attacked.
-      this.wakeTick = context.tick + wakeDelayTicks;
-      boss.attackBlockedUntilTick = this.wakeTick + attackableTicks;
-      boss.combat.nextActionTick = this.wakeTick + wakeTicks;
-    }
+    if (this.wakeTick === null && boss?.alive && player?.alive && player.attackTarget === boss.id && isSquarelyBeside(player.position)) this.rouse(boss, context.tick);
     for (const { endTick } of this.spits.filter(({ tick }) => tick === context.tick)) if (boss?.alive && player?.alive) this.spit(boss, player, context, endTick);
     this.spits = this.spits.filter(({ tick }) => tick > context.tick);
     if (this.outcome.phase === "resolving" && context.tick >= this.outcome.completionTick) this.outcome = { ...this.outcome, phase: "victory" };
@@ -402,6 +401,20 @@ class DukeSucellusEncounter {
     npc.combat.nextActionTick = context.tick + speed;
     if (isBeside(player.position)) return this.melee(npc, player, context);
     return this.magic(npc, player, context);
+  }
+
+  // He wakes two ticks from `tick`. The engine takes the player off him
+  // again, and refuses further clicks, while he cannot be attacked.
+  rouse(boss, tick) {
+    this.wakeTick = tick + wakeDelayTicks;
+    boss.attackBlockedUntilTick = this.wakeTick + attackableTicks;
+    boss.combat.nextActionTick = this.wakeTick + wakeTicks;
+  }
+  // The sandbox's free-for-all wakes him at the start (sandbox/encounter.js):
+  // there the monsters fight him, and none feeds him.
+  wakeBoss(context) {
+    const boss = context.world.getNpc(bossActorId);
+    if (this.wakeTick === null && boss?.alive) this.rouse(boss, context.tick);
   }
 
   // --- his attacks ------------------------------------------------------

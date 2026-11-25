@@ -79,7 +79,9 @@ try {
         console.log("path", path, enraged ? "enraged" : "normal", magic ? "magic" : "ranged",
           ids, await played.jsonValue());
         await played.dispose();
-        const primaryId = magic ? (enraged ? 2177 : 2176) : (enraged ? 2179 : 2178);
+        // OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 618-705): at path levels 0-3 the enraged pots are the normal ones.
+        const enragedPot = enraged && path >= 4;
+        const primaryId = magic ? (enragedPot ? 2177 : 2176) : (enragedPot ? 2179 : 2178);
         const trajectory = await page.evaluate(id => [...spitFlights.values()]
           .find(flight => flight.id === id && flight.samples[0].f < 0.15 && flight.samples.at(-1).f > 0.85)
           ?.samples, primaryId);
@@ -89,7 +91,9 @@ try {
         const range = Math.hypot(last.x - first.x, last.y - first.y) / span;
         const bend = Math.max(...trajectory.map(s => Math.abs(s.z - first.z -
           (last.z - first.z) * (s.f - first.f) / span)));
-        assert.ok(range > 6 && range < 7.5, "Jaw to centerline burst distance in tiles");
+        // OBS (same recording, every spit): from the tile 7 east of his south-west tile to the one 15 east, 8 tiles.
+        if (path < 4) assert.ok(range > 7.5 && range < 8.5, "Jaw tile to centerline burst distance in tiles");
+        else assert.ok(range > 6 && range < 7.5, "Jaw to centerline burst distance in tiles");
         assert.ok(last.z > first.z + 1.3, "The first leg rises from the mouth");
         assert.ok(bend > (enraged ? 0.25 : 0.45) && bend < 1,
           "Midflight lift above the release-to-burst line");

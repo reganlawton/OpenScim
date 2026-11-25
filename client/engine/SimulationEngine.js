@@ -912,6 +912,7 @@ var SimulationEngine = class {
       tickEvents: this.tickEvents,
       logEvent: (event) => this.logEvent(event),
       grantNextAttackSpeedup: (actorId, speedupTicks) => this.combatSystem.grantNextAttackSpeedup(actorId, speedupTicks, tick),
+      delayNextAttack: (actorId, delayTicks) => this.combatSystem.delayNextAttack(actorId, delayTicks, tick),
       spawnNpc: (npc) => this.spawnNpc(npc),
       despawnNpc: (npcId) => this.despawnNpc(npcId),
       queueNpcHit: (attack) => this.queueNpcHit(attack),
@@ -2499,6 +2500,8 @@ var SimulationEngine = class {
           : {
               sourceNpcTypeId: hit.sourceNpcTypeId,
             }),
+        // The actor that dealt it, for the encounter's rules (the sandbox's Vardorvis heals off it).
+        ...(undefined === hit.sourceId ? {} : { sourceId: hit.sourceId }),
       });
     }
     this.syncVitalsToStats();

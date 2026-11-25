@@ -17,33 +17,74 @@ const context = {tick: 10, world: {actors: new Map([["zebak", boss], ["player", 
 const settings = {acidWidth: 5, jugWidth: 5, gap: 3};
 phases.begin(context, "roar", settings);
 const launch = events.at(-1);
-assert.ok(launch.animations.every(cue => cue.clipId === "attack"));
-assert.ok(launch.projectiles.every(cue => cue.startDelayCycles === 65 && cue.endDelayCycles === (cue.spotAnimId === 2194 ? 150 : 180)));
+// OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, the specials animated on ticks 300 and 544, which start
+// on 299 and 543): his head alone plays the spit, a tick after the special starts, and the vomit is heard
+// then; the throw leaves 60 cycles after the start, from 250 high on slope 35, and all of it lands at 180:
+// rocks 2172, jugs 2173, pools that spread 1555, single pools 2194.
+assert.deepEqual(launch.animations, [{actorId: "zebak", clipId: "attack", delayCycles: 30}]);
+assert.equal(launch.throwDelayCycles, 0);
+assert.ok(launch.projectiles.every(cue => cue.startDelayCycles === 60 && cue.endDelayCycles === 180));
+assert.ok(launch.projectiles.every(cue => cue.startHeight === 250 && cue.endHeight === 0 && cue.slope === 35));
+const thrown = id => launch.projectiles.filter(cue => cue.spotAnimId === id).length;
+assert.deepEqual([thrown(2172), thrown(2173), thrown(1555), thrown(2194)], [2, 7, 6, 7]);
+assert.equal(launch.projectiles.length, 22);
 assert.equal(effects.resolve(launch).sound.id, 5908);
 assert.equal(effects.resolve(launch).sound.delayCycles, 30);
-for (context.tick++; context.tick < 15; context.tick++) {
+for (context.tick++; context.tick < 16; context.tick++) {
   phases.step(context, settings, boss);
   assert.equal(phases.acid.size + phases.of("rock").length + phases.of("jug").length, 0);
 }
+// OBS (same recording, ticks 154, 305, 367, 426, 549): acid, rocks and jugs land in the same tick, 6 after
+// the special starts. No graphic where a pool lands; a splat is heard a cycle later and the spray of the
+// pools that spread flies along the ground on slope 20. Dust 2184 and 5913 where a rock or a jug lands.
 phases.step(context, settings, boss);
-const impact = events.at(-1);
-assert.ok(impact.graphics.some(cue => cue.spotAnimId === 1556));
+const [impact, landing] = events.slice(-2);
+assert.equal(impact.acidLanded, true);
+assert.deepEqual(impact.graphics, []);
+assert.ok(impact.projectiles.length > 0);
+assert.ok(impact.projectiles.every(cue => cue.spotAnimId === 2194 && cue.startHeight === 0 && cue.endHeight === 0 && cue.slope === 20));
 assert.deepEqual(new Set(impact.projectiles.map(cue => cue.endDelayCycles)), new Set([30,60]));
-assert.equal(effects.resolve(impact).sound.id, 5909);
-assert.equal(effects.resolve(impact).sound.delayCycles, 30);
-assert.equal(phases.of("rock").length + phases.of("jug").length, 0);
-const initialAcid = phases.acid.size;
-context.tick++;
-phases.step(context, settings, boss);
-assert.ok(events.at(-1).graphics.some(cue => cue.spotAnimId === 2174));
-assert.equal(effects.resolve(events.at(-1)).sound.id, 5867);
+assert.deepEqual(effects.resolve(impact).sound, {id: 5909, delayCycles: 1, channel: "sfx"});
+assert.equal(landing.objectsLanded, true);
+assert.deepEqual(landing.graphics.map(cue => cue.spotAnimId), Array(9).fill(2184));
+assert.deepEqual(new Set(landing.graphics.map(cue => cue.target.position.join(","))),
+  new Set([...phases.of("rock"), ...phases.of("jug")].map(object => object.actor.position.join(","))));
+assert.equal(effects.resolve(landing).sound.id, 5913);
 assert.equal(phases.of("rock").length, 2);
 assert.equal(phases.of("jug").length, 7);
+const initialAcid = phases.acid.size;
+assert.equal(initialAcid, 13);
+context.tick++;
+phases.step(context, settings, boss);
 assert.ok(phases.acid.size > initialAcid);
 const innerSpread = phases.acid.size;
 context.tick++;
 phases.step(context, settings, boss);
 assert.ok(phases.acid.size > innerSpread);
+{
+  // OBS (same recording, the specials that start on ticks 147, 360 and 419 with a blood spell): the vomit,
+  // the flight and the landing are each one tick later; the animation is not.
+  const events = [];
+  const phases = new ZebakPhases(() => 0.3, () => arena, (_, event) => events.push(event));
+  const context = {tick: 10, world: {actors: new Map([["zebak", boss], ["player", player]])},
+    spawnNpc() {}, despawnNpc() {}, tickEvents: {emit() {}}};
+  phases.begin(context, "roar", settings, true);
+  const launch = events.at(-1);
+  assert.equal(phases.active.throwDelay, 1);
+  assert.deepEqual(launch.animations, [{actorId: "zebak", clipId: "attack", delayCycles: 30}]);
+  assert.ok(launch.projectiles.every(cue => cue.startDelayCycles === 90 && cue.endDelayCycles === 210));
+  assert.equal(effects.resolve(launch).sound.delayCycles, 60);
+  for (context.tick++; context.tick < 17; context.tick++) {
+    phases.step(context, settings, boss);
+    assert.equal(phases.acid.size + phases.of("rock").length + phases.of("jug").length, 0);
+  }
+  phases.step(context, settings, boss);
+  assert.deepEqual([phases.of("rock").length, phases.of("jug").length, phases.acid.size], [2, 7, 13]);
+  const spread = phases.acid.size;
+  context.tick++;
+  phases.step(context, settings, boss);
+  assert.ok(phases.acid.size > spread);
+}
 
 const jug = phases.of("jug")[0];
 jug.actor.position = [30,23];
@@ -76,7 +117,8 @@ context.tick++;
 phases.stepJugs(context, settings, player);
 assert.ok(events.at(-1).graphics.some(cue => cue.spotAnimId === 2192));
 assert.equal(events.at(-1).jugBreakCause, "weapon");
-assert.equal(effects.resolve(events.at(-1)).kind, "pass");
+// OBS (20261125-160410-Tombs-of-Amascut.jsonl.gz, ticks 377, 399, 433, 564, 577): 2496 as a jug goes, whatever broke it.
+assert.deepEqual(effects.resolve(events.at(-1)), {kind: "play", sound: {id: 2496, channel: "sfx"}});
 context.tick++;
 phases.stepJugs(context, settings, player);
 assert.equal(phases.actors.has(other.actor.id), false);
@@ -92,20 +134,29 @@ assert.equal(shelter.actor.vitals.hp, 150);
 context.tick++;
 phases.stepJugs(context, settings, player);
 assert.equal(events.at(-1).jugBreakCause, "collision");
-assert.equal(effects.resolve(events.at(-1)).kind, "pass");
+assert.deepEqual(effects.resolve(events.at(-1)), {kind: "play", sound: {id: 2496, channel: "sfx"}});
 
 phases.clearSpecial(context);
 phases.begin(context, "waves", settings);
 const start = context.tick;
-for (; context.tick <= start + 15; context.tick++) phases.step(context, settings, boss);
+let fallTick = null;
+for (; context.tick <= start + 15; context.tick++) {
+  const before = events.length;
+  phases.step(context, settings, boss);
+  if (fallTick === null && events.slice(before).some(event => event.graphics.some(cue => cue.spotAnimId === 2195))) fallTick = context.tick;
+}
 const fall = events.find(event => event.graphics.some(cue => cue.spotAnimId === 2195));
 const shoreBursts = fall.graphics.filter(cue => cue.spotAnimId === 68);
-assert.equal(shoreBursts.length, 8);
+// OBS (same recording, ticks 155, 307, 427): seven boulders on the shore row, every third column from 19
+// to 37, 8 ticks after the waves start, with 1678 and the sweep 5882 and, 200 cycles on, 5843.
+assert.equal(shoreBursts.length, 7);
+assert.deepEqual(shoreBursts.map(cue => cue.target.position), [19, 22, 25, 28, 31, 34, 37].map(x => [x, 21]));
+assert.equal(fallTick, start + 8);
 assert.ok(shoreBursts.every(cue => cue.delayCycles === 200));
 assert.ok(fall.graphics.filter(cue => cue.spotAnimId === 2195).every(cue => cue.delayCycles === 6));
 assert.deepEqual(shoreBursts.map(cue => cue.target.position),
   fall.graphics.filter(cue => cue.spotAnimId === 2195).map(cue => cue.target.position));
-assert.deepEqual(effects.resolve(fall).sound.map(s => [s.id, s.delayCycles]), [[5882,30],[5880,230]]);
+assert.deepEqual(effects.resolve(fall).sound.map(s => [s.id, s.delayCycles]), [[1678,0],[5882,0],[5843,200]]);
 assert.equal(effects.resolve(events.find(event => event.tidalSurgeSound)).sound.id, 5852);
 for (const upset of [false, true]) {
   const settings = configure({upset});
@@ -127,7 +178,7 @@ for (const upset of [false, true]) {
   assert.deepEqual(new Set(phases.splashes.at(-1).tiles.map(p => p.join(","))), wet);
   const groundWater = events.at(-1).graphics.filter(g => g.spotAnimId === 95);
   assert.equal(events.at(-1).jugBreakCause, "roar");
-  assert.equal(effects.resolve(events.at(-1)).kind, "pass");
+  assert.deepEqual(effects.resolve(events.at(-1)), {kind: "play", sound: {id: 2496, channel: "sfx"}});
   assert.deepEqual(new Set(groundWater.map(g => g.target.position.join(","))), wet);
   for (const tile of wet) assert.ok(!phases.acid.has(tile));
   for (const tile of dry) assert.ok(phases.acid.has(tile));
